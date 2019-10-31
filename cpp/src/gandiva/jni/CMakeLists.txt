@@ -47,7 +47,10 @@ add_custom_command(OUTPUT ${PROTO_OUTPUT_FILES}
                    VERBATIM)
 
 add_custom_target(gandiva_jni_proto ALL DEPENDS ${PROTO_OUTPUT_FILES})
-set(PROTO_SRCS "${PROTO_OUTPUT_DIR}/Types.pb.cc")
+set(PROTO_SRCS
+    "${PROTO_OUTPUT_DIR}/Types.pb.cc"
+    protobuf_utils.cc)
+
 set(PROTO_HDRS "${PROTO_OUTPUT_DIR}/Types.pb.h")
 
 # Create the jni header file (from the java class).
@@ -61,7 +64,21 @@ set(GANDIVA_JNI_SOURCES
     config_holder.cc
     expression_registry_helper.cc
     jni_common.cc)
-#   ${PROTO_SRCS})
+
+add_arrow_lib(gandiva_protobuf
+              BUILD_SHARED
+              SOURCES
+              ${PROTO_SRCS}
+              OUTPUTS
+              GANDIVA_PROTOBUF_LIBRARIES
+              SHARED_PRIVATE_LINK_LIBS
+              ${GANDIVA_LINK_LIBS}
+              STATIC_LINK_LIBS
+              ${GANDIVA_LINK_LIBS}
+              DEPENDENCIES
+              gandiva_jni_proto
+              PRIVATE_INCLUDES
+              ${CMAKE_CURRENT_BINARY_DIR})
 
 # For users of gandiva_jni library (including integ tests), include-dir is :
 #   /usr/**/include dir after install,
@@ -80,7 +97,6 @@ add_arrow_lib(gandiva_jni
               ${GANDIVA_LINK_LIBS}
               DEPENDENCIES
               gandiva_java
-              gandiva_jni_proto
               gandiva_jni_headers
               EXTRA_INCLUDES
               $<INSTALL_INTERFACE:include>
