@@ -153,12 +153,12 @@ Java_org_apache_arrow_adapter_parquet_ParquetReaderJniWrapper_nativeInitParquetR
   int row_group_indices_len = env->GetArrayLength(row_group_indices);
   if (row_group_indices_len == 0) {
     std::vector<int> _row_group_indices = {};
-    msg = reader->Initialize(_row_group_indices, _column_indices, batch_size, use_hdfs3);
+    msg = reader->Initialize(_column_indices, _row_group_indices, batch_size, use_hdfs3);
   } else {
     jint* row_group_indices_ptr = env->GetIntArrayElements(row_group_indices, 0);
     std::vector<int> _row_group_indices(row_group_indices_ptr,
                                         row_group_indices_ptr + row_group_indices_len);
-    msg = reader->Initialize(_row_group_indices, _column_indices, batch_size, use_hdfs3);
+    msg = reader->Initialize(_column_indices, _row_group_indices, batch_size, use_hdfs3);
     env->ReleaseIntArrayElements(row_group_indices, row_group_indices_ptr, JNI_ABORT);
   }
   if (!msg.ok()) {
