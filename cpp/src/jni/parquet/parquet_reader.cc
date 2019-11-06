@@ -108,12 +108,8 @@ std::vector<int> ParquetReader::GetRowGroupIndices(int num_row_groups, int64_t s
   for (int i = 0; i < num_row_groups; i++) {
     if (pos >= start_pos && pos < end_pos) {
       row_group_indices.push_back(i);
-      break;
     }
     pos += reader->RowGroup(i)->metadata()->total_byte_size();
-  }
-  if (row_group_indices.empty()) {
-    row_group_indices.push_back(num_row_groups - 1);
   }
   return row_group_indices;
 }
