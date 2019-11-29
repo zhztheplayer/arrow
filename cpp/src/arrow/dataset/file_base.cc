@@ -120,5 +120,33 @@ bool FileSystemDataSource::PartitionMatches(const fs::FileStats& stats,
   return true;
 }
 
+FileSetDataSource::FileSetDataSource(FileSourceVector files, FileFormatPtr format)
+    : files_(std::move(files)),
+      format_(std::move(format)) {}
+
+DataFragmentIterator FileSetDataSource::GetFragmentsImpl(ScanOptionsPtr options) {
+  auto file_srcs_it = MakeVectorIterator(std::move(files_));
+  auto file_src_to_fragment = [options, this](const FileSourcePtr& source, std::shared_ptr<DataFragment>* out) {
+    ARROW_ASSIGN_OR_RAISE(*out, format_->MakeFragment(*source, options));
+    return Status::OK();
+  };
+  return MakeMaybeMapIterator(file_src_to_fragment, std::move(file_srcs_it));
+}
+
+Result<DataSourcePtr> FileSetDataSource::Make(const std::vector<std::string>& paths,
+                                              const fs::FileSystemPtr &fs,
+                                              FileFormatPtr format) {
+  FileSourceVector file_srcs;
+  for (const auto& path : paths) {
+    std::shared_ptr<FileSource> file_src = std::make_shared<FileSource>(path, fs.get());
+    file_srcs.push_back(std::move(file_src));
+  }
+  return DataSourcePtr(
+      new FileSetDataSource(file_srcs, std::move(format)));
+}
+Result<DataSourcePtr> FileSetDataSource::Make(FileSourceVector files, FileFormatPtr format) {
+  return DataSourcePtr(new FileSetDataSource(std::move(files), std::move(format)));
+}
+
 }  // namespace dataset
 }  // namespace arrow

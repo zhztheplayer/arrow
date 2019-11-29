@@ -205,5 +205,27 @@ class ARROW_DS_EXPORT FileSystemDataSource : public DataSource {
   FileFormatPtr format_;
 };
 
+class ARROW_DS_EXPORT FileSetDataSource : public DataSource {
+ public:
+  FileSetDataSource(FileSourceVector files, FileFormatPtr format);
+
+  static Result<DataSourcePtr> Make(FileSourceVector files, FileFormatPtr format);
+
+  static Result<DataSourcePtr> Make(const std::vector<std::string> &paths,
+                                    const fs::FileSystemPtr &fs,
+                                    FileFormatPtr format);
+
+ protected:
+  DataFragmentIterator GetFragmentsImpl(ScanOptionsPtr options) override;
+
+  std::string type() const override {
+    return "fileset_data_source";
+  }
+
+ private:
+  FileSourceVector files_;
+  FileFormatPtr format_;
+};
+
 }  // namespace dataset
 }  // namespace arrow

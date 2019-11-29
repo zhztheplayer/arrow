@@ -24,6 +24,8 @@ cmake_install.cmake
 build/
 *-build/
 Testing/
+cmake-build-debug/
+release-build/
 
 #########################################
 # Editor temporary/working/backup files #

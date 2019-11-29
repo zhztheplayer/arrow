@@ -90,6 +90,14 @@ TEST_F(TestFileSystemBasedDataSource, Basic) {
   AssertFragmentsAreFromPath(source_->GetFragments(options_), {"A/a", "A/B/b"});
 }
 
+TEST_F(TestFileSystemBasedDataSource, FileSetDataSource) {
+  MakeFileSetSource({});
+  AssertFragmentsAreFromPath(source_->GetFragments(options_), {});
+
+  MakeFileSetSource({"a", "b", "c", "A/a", "B/b", "C/c"});
+  AssertFragmentsAreFromPath(source_->GetFragments(options_), {"a", "b", "c", "A/a", "B/b", "C/c"});
+}
+
 TEST_F(TestFileSystemBasedDataSource, RootPartitionPruning) {
   auto source_partition = ("a"_ == 5).Copy();
   MakeSource({fs::File("a"), fs::File("b")}, source_partition);
