@@ -18,6 +18,7 @@
 #include "arrow/dataset/file_base.h"
 
 #include <algorithm>
+#include <memory>
 #include <vector>
 
 #include "arrow/dataset/filter.h"
@@ -118,6 +119,55 @@ bool FileSystemDataSource::PartitionMatches(const fs::FileStats& stats,
   }
 
   return true;
+}
+
+FileSetDataSource::FileSetDataSource(FileSourceVector files, FileFormatPtr format)
+    : files_(std::move(files)),
+      format_(std::move(format)) {}
+
+DataFragmentIterator FileSetDataSource::GetFragmentsImpl(ScanOptionsPtr options) {
+  auto file_srcs_it = MakeVectorIterator(std::move(files_));
+  auto file_src_to_fragment = [options, this](const FileSourcePtr& source, std::shared_ptr<DataFragment>* out) {
+    ARROW_ASSIGN_OR_RAISE(*out, format_->MakeFragment(*source, options));
+    return Status::OK();
+  };
+  return MakeMaybeMapIterator(file_src_to_fragment, std::move(file_srcs_it));
+}
+
+Result<DataSourcePtr> FileSetDataSource::Make(const std::vector<std::string>& paths,
+                                              const fs::FileSystemPtr &fs,
+                                              FileFormatPtr format) {
+  FileSourceVector file_srcs;
+  for (const auto& path : paths) {
+    std::shared_ptr<FileSource> file_src = std::make_shared<FileSource>(path, fs.get());
+    file_srcs.push_back(std::move(file_src));
+  }
+  return DataSourcePtr(
+      new FileSetDataSource(file_srcs, std::move(format)));
+}
+Result<DataSourcePtr> FileSetDataSource::Make(FileSourceVector files, FileFormatPtr format) {
+  return DataSourcePtr(new FileSetDataSource(std::move(files), std::move(format)));
+}
+
+// todo don't include following code in release version
+Result<std::shared_ptr<FileSetScannerBuilder>> FileSetScannerBuilder::Make(std::vector<std::string> paths,
+                                                                           FileFormatPtr file_format,
+                                                                           fs::FileSystemPtr fs,
+                                                                           ScanContextPtr context) {
+
+  FileSourceVector file_src;
+  for (const std::string& path : paths) {
+    file_src.push_back(std::make_shared<FileSource>(path, fs.get()));
+  }
+  ARROW_ASSIGN_OR_RAISE(DataSourcePtr src, FileSetDataSource::Make(file_src, file_format))
+  std::shared_ptr<Schema> schema;
+  if (file_src.empty()) {
+    schema = std::shared_ptr<Schema>(nullptr); // fixme merge schemas
+  } else {
+    ARROW_ASSIGN_OR_RAISE(schema, file_format->Inspect(*file_src.at(0)));
+  }
+  ARROW_ASSIGN_OR_RAISE(DatasetPtr dataset, Dataset::Make({src}, schema));
+  return std::make_shared<FileSetScannerBuilder>(dataset, std::move(context));
 }
 
 }  // namespace dataset

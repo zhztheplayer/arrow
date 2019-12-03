@@ -12,16 +12,39 @@
 # software distributed under the License is distributed on an
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
 # KIND, either express or implied.  See the License for the
-# specific language governing permissions and limitations
+# specific language governing permissions and limitationsn
 # under the License.
 
 #
-# arrow_jni
+# arrow_dataset_jni
 #
 
-arrow_install_all_headers("jni")
+project(arrow_dataset_jni)
 
-if(ARROW_ORC)
-  add_subdirectory(orc)
-endif()
-add_subdirectory(dataset)
+cmake_minimum_required(VERSION 3.11)
+
+find_package(JNI REQUIRED)
+
+add_custom_target(arrow_dataset_jni)
+
+set(JNI_HEADERS_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+
+add_subdirectory(../../../../java/dataset ./java)
+
+set(ARROW_BUILD_STATIC OFF)
+
+add_arrow_lib(arrow_dataset_jni
+        BUILD_SHARED
+        SOURCES
+        jni_wrapper.cpp
+        OUTPUTS
+        ARROW_DATASET_JNI_LIBRARIES
+        SHARED_PRIVATE_LINK_LIBS
+        arrow_static
+        EXTRA_INCLUDES
+        ${JNI_HEADERS_DIR}
+        PRIVATE_INCLUDES
+        ${JNI_INCLUDE_DIRS}
+        DEPENDENCIES
+        arrow_static
+        arrow_dataset_java)

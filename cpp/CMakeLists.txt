@@ -134,6 +134,7 @@ endif()
 # ----------------------------------------------------------------------
 # cmake options
 include(DefineOptions)
+include(ClionBuild) # to enable Clion insight
 
 # Needed for linting targets, etc.
 find_package(PythonInterp)

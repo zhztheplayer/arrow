@@ -205,5 +205,39 @@ class ARROW_DS_EXPORT FileSystemDataSource : public DataSource {
   FileFormatPtr format_;
 };
 
+class ARROW_DS_EXPORT FileSetDataSource : public DataSource {
+ public:
+  FileSetDataSource(FileSourceVector files, FileFormatPtr format);
+
+  static Result<DataSourcePtr> Make(FileSourceVector files, FileFormatPtr format);
+
+  static Result<DataSourcePtr> Make(const std::vector<std::string> &paths,
+                                    const fs::FileSystemPtr &fs,
+                                    FileFormatPtr format);
+
+ protected:
+  DataFragmentIterator GetFragmentsImpl(ScanOptionsPtr options) override;
+
+  std::string type() const override {
+    return "fileset_data_source";
+  }
+
+ private:
+  FileSourceVector files_;
+  FileFormatPtr format_;
+};
+
+// todo don't include following code in release version
+class ARROW_DS_EXPORT FileSetScannerBuilder : ScannerBuilder {
+ public:
+  FileSetScannerBuilder(DatasetPtr dataset, ScanContextPtr context)
+      : ScannerBuilder(std::move(dataset), std::move(context)) {}
+
+  static Result<std::shared_ptr<FileSetScannerBuilder>> Make(std::vector<std::string> paths,
+                                                             FileFormatPtr file_format,
+                                                             fs::FileSystemPtr fs,
+                                                             ScanContextPtr context);
+};
+
 }  // namespace dataset
 }  // namespace arrow

@@ -296,6 +296,20 @@ class TestFileSystemBasedDataSource : public ::testing::Test {
                                                              partitions, format));
   }
 
+  void MakeFileSetSource(const std::vector<std::string>& paths) {
+    std::vector<fs::FileStats> stats;
+    for (const std::string& path : paths) {
+      stats.push_back(fs::File(path));
+    }
+    MakeFileSystem(stats);
+    auto format = std::make_shared<DummyFileFormat>();
+    FileSourceVector file_srcs;
+    for (const fs::FileStats& s : stats) {
+      file_srcs.push_back(std::make_shared<FileSource>(s.path(), fs_.get()));
+    }
+    ASSERT_OK_AND_ASSIGN(source_, FileSetDataSource::Make(std::move(file_srcs), format));
+  }
+
  protected:
   std::shared_ptr<fs::FileSystem> fs_;
   DataSourcePtr source_;
