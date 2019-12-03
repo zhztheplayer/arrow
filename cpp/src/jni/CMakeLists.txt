@@ -18,10 +18,9 @@
 #
 # arrow_jni
 #
-
-arrow_install_all_headers("jni")
-
 if(ARROW_ORC)
   add_subdirectory(orc)
 endif()
-add_subdirectory(dataset)
+if(ARROW_JNI)
+  add_subdirectory(dataset)
+endif()
