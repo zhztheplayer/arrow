@@ -2,24 +2,13 @@
 // Created by root on 11/26/19.
 //
 
+#include "jni/concurrent_map.h"
+
 #include "org_apache_arrow_dataset_file_JniWrapper.h"
 #include "org_apache_arrow_dataset_jni_JniWrapper.h"
 
-/*
- * Class:     org_apache_arrow_dataset_file_JniWrapper
- * Method:    makeSource
- * Signature: ([Ljava/lang/String;II)J
- */
-JNIEXPORT jlong JNICALL Java_org_apache_arrow_dataset_file_JniWrapper_makeSource
-    (JNIEnv *, jobject, jobjectArray, jint, jint);
 
-/*
- * Class:     org_apache_arrow_dataset_file_JniWrapper
- * Method:    getSchema
- * Signature: ([Ljava/lang/String;II)[B
- */
-JNIEXPORT jbyteArray JNICALL Java_org_apache_arrow_dataset_file_JniWrapper_getSchema
-    (JNIEnv *, jobject, jobjectArray, jint, jint);
+using arrow::jni::ConcurrentMap;
 
 /*
  * Class:     org_apache_arrow_dataset_jni_JniWrapper
@@ -77,3 +66,18 @@ JNIEXPORT void JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_closeScanTas
 JNIEXPORT void JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_releaseBuffer
     (JNIEnv *, jobject, jlong);
 
+/*
+ * Class:     org_apache_arrow_dataset_file_JniWrapper
+ * Method:    makeSource
+ * Signature: ([Ljava/lang/String;II)J
+ */
+JNIEXPORT jlong JNICALL Java_org_apache_arrow_dataset_file_JniWrapper_makeSource
+        (JNIEnv *, jobject, jobjectArray, jint, jint);
+
+/*
+ * Class:     org_apache_arrow_dataset_file_JniWrapper
+ * Method:    getSchema
+ * Signature: ([Ljava/lang/String;II)[B
+ */
+JNIEXPORT jbyteArray JNICALL Java_org_apache_arrow_dataset_file_JniWrapper_getSchema
+        (JNIEnv *, jobject, jobjectArray, jint, jint);

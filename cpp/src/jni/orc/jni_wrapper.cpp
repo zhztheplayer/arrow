@@ -25,11 +25,11 @@
 #include <iostream>
 #include <string>
 
+#include "jni/concurrent_map.h"
+
 #include "org_apache_arrow_adapter_orc_OrcMemoryJniWrapper.h"
 #include "org_apache_arrow_adapter_orc_OrcReaderJniWrapper.h"
 #include "org_apache_arrow_adapter_orc_OrcStripeReaderJniWrapper.h"
-
-#include "./concurrent_map.h"
 
 using ORCFileReader = arrow::adapters::orc::ORCFileReader;
 using RecordBatchReader = arrow::RecordBatchReader;
