@@ -18,32 +18,33 @@
 package org.apache.arrow.dataset.jni;
 
 import org.apache.arrow.dataset.datasource.DataSource;
-import org.apache.arrow.dataset.fragment.DataFragment;
-import org.apache.arrow.dataset.scanner.ScanOptions;
+import org.apache.arrow.dataset.datasource.DataSourceDiscovery;
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.vector.types.pojo.Schema;
 
-import java.util.stream.Collectors;
-import java.util.stream.LongStream;
+import java.nio.ByteBuffer;
 
-public class JniBasedDataSource implements DataSource, AutoCloseable {
+public class JniBasedDataSourceDiscovery implements DataSourceDiscovery, AutoCloseable {
+  private final long dataSourceDiscoveryId;
+  private final BufferAllocator allocator;
 
-  private final JniBasedContext context;
-  private final long dataSourceId;
-
-  public JniBasedDataSource(JniBasedContext context, long dataSourceId) {
-    this.context = context;
-    this.dataSourceId = dataSourceId;
+  public JniBasedDataSourceDiscovery(BufferAllocator allocator, long dataSourceDiscoveryId) {
+    this.allocator = allocator;
+    this.dataSourceDiscoveryId = dataSourceDiscoveryId;
+  }
+  @Override
+  public Schema inspect() {
+    return Schema.deserialize(ByteBuffer.wrap(JniWrapper.get().inspectSchema(dataSourceDiscoveryId)));
   }
 
   @Override
-  public Iterable<? extends DataFragment> getFragments(ScanOptions options) {
-    return LongStream.of(JniWrapper.get()
-      .getFragments(dataSourceId, options.getColumns(), options.getFilter().toByteArray()))
-      .mapToObj(id -> new JniBasedDataFragment(context, id))
-      .collect(Collectors.toList());
+  public DataSource finish() {
+    return new JniBasedDataSource(new JniBasedContext(inspect(), allocator),
+      JniWrapper.get().createDataSource(dataSourceDiscoveryId));
   }
 
   @Override
   public void close() throws Exception {
-    JniWrapper.get().closeDataSource(dataSourceId);
+    JniWrapper.get().closeDataSourceDiscovery(dataSourceDiscoveryId);
   }
 }

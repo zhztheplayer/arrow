@@ -211,8 +211,8 @@ class ARROW_DS_EXPORT FileSetDataSource : public DataSource {
 
   static Result<DataSourcePtr> Make(FileSourceVector files, FileFormatPtr format);
 
-  static Result<DataSourcePtr> Make(const std::vector<std::string> &paths,
-                                    const fs::FileSystemPtr &fs,
+  static Result<DataSourcePtr> Make(std::vector<std::string> paths,
+                                    fs::FileSystemPtr fs,
                                     FileFormatPtr format);
 
  protected:
@@ -225,18 +225,6 @@ class ARROW_DS_EXPORT FileSetDataSource : public DataSource {
  private:
   FileSourceVector files_;
   FileFormatPtr format_;
-};
-
-// todo don't include following code in release version
-class ARROW_DS_EXPORT FileSetScannerBuilder : ScannerBuilder {
- public:
-  FileSetScannerBuilder(DatasetPtr dataset, ScanContextPtr context)
-      : ScannerBuilder(std::move(dataset), std::move(context)) {}
-
-  static Result<std::shared_ptr<FileSetScannerBuilder>> Make(std::vector<std::string> paths,
-                                                             FileFormatPtr file_format,
-                                                             fs::FileSystemPtr fs,
-                                                             ScanContextPtr context);
 };
 
 }  // namespace dataset

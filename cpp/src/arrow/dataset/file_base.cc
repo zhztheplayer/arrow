@@ -134,8 +134,8 @@ DataFragmentIterator FileSetDataSource::GetFragmentsImpl(ScanOptionsPtr options)
   return MakeMaybeMapIterator(file_src_to_fragment, std::move(file_srcs_it));
 }
 
-Result<DataSourcePtr> FileSetDataSource::Make(const std::vector<std::string>& paths,
-                                              const fs::FileSystemPtr &fs,
+Result<DataSourcePtr> FileSetDataSource::Make(std::vector<std::string> paths,
+                                              fs::FileSystemPtr fs,
                                               FileFormatPtr format) {
   FileSourceVector file_srcs;
   for (const auto& path : paths) {
@@ -148,27 +148,6 @@ Result<DataSourcePtr> FileSetDataSource::Make(const std::vector<std::string>& pa
 
 Result<DataSourcePtr> FileSetDataSource::Make(FileSourceVector files, FileFormatPtr format) {
   return DataSourcePtr(new FileSetDataSource(std::move(files), std::move(format)));
-}
-
-// todo don't include following code in release version
-Result<std::shared_ptr<FileSetScannerBuilder>> FileSetScannerBuilder::Make(std::vector<std::string> paths,
-                                                                           FileFormatPtr file_format,
-                                                                           fs::FileSystemPtr fs,
-                                                                           ScanContextPtr context) {
-
-  FileSourceVector file_src;
-  for (const std::string& path : paths) {
-    file_src.push_back(std::make_shared<FileSource>(path, fs.get()));
-  }
-  ARROW_ASSIGN_OR_RAISE(DataSourcePtr src, FileSetDataSource::Make(file_src, file_format))
-  std::shared_ptr<Schema> schema;
-  if (file_src.empty()) {
-    schema = std::shared_ptr<Schema>(nullptr); // fixme merge schemas
-  } else {
-    ARROW_ASSIGN_OR_RAISE(schema, file_format->Inspect(*file_src.at(0)));
-  }
-  ARROW_ASSIGN_OR_RAISE(DatasetPtr dataset, Dataset::Make({src}, schema));
-  return std::make_shared<FileSetScannerBuilder>(dataset, std::move(context));
 }
 
 }  // namespace dataset

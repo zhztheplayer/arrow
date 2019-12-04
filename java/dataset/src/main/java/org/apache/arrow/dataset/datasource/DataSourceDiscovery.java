@@ -15,20 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.arrow.dataset.file;
+package org.apache.arrow.dataset.datasource;
 
-public class JniWrapper {
+import org.apache.arrow.vector.types.pojo.Schema;
 
-  private static final JniWrapper INSTANCE = new JniWrapper();
-  
-  public static JniWrapper get() {
-    return INSTANCE;
-  }
+public interface DataSourceDiscovery {
 
-  private JniWrapper() {
-    
-  }
+  Schema inspect();
 
-  public native long makeFileSetDataSourceDiscovery(String[] paths, int fileFormat, int fileSystem);
-
+  DataSource finish();
 }

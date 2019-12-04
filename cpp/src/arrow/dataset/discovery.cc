@@ -138,5 +138,32 @@ Result<DataSourcePtr> FileSystemDataSourceDiscovery::Finish() {
                                     format_);
 }
 
+FileSetDataSourceDiscovery::FileSetDataSourceDiscovery(FileSourceVector files, FileFormatPtr format)
+    : files_(std::move(files)), format_(std::move(format)) {}
+
+Result<DataSourceDiscoveryPtr> FileSetDataSourceDiscovery::Make(FileSourceVector files, FileFormatPtr format) {
+  return DataSourceDiscoveryPtr(new FileSetDataSourceDiscovery(std::move(files), std::move(format)));
+}
+
+Result<DataSourceDiscoveryPtr> FileSetDataSourceDiscovery::Make(std::vector<std::string> paths,
+                                                       fs::FileSystemPtr fs,
+                                                       FileFormatPtr format) {
+  FileSourceVector file_srcs;
+  for (const auto& path : paths) {
+    std::shared_ptr<FileSource> file_src = std::make_shared<FileSource>(path, fs.get());
+    file_srcs.push_back(std::move(file_src));
+  }
+  return DataSourceDiscoveryPtr(new FileSetDataSourceDiscovery(std::move(file_srcs), std::move(format)));
+}
+
+Result<std::shared_ptr<Schema>> FileSetDataSourceDiscovery::Inspect() {
+  ARROW_ASSIGN_OR_RAISE(std::shared_ptr<arrow::Schema> schema, format_->Inspect(*files_.at(0)))
+  return schema;
+}
+
+Result<DataSourcePtr> FileSetDataSourceDiscovery::Finish() {
+  return FileSetDataSource::Make(files_, format_);
+}
+
 }  // namespace dataset
 }  // namespace arrow

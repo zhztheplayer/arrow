@@ -17,30 +17,24 @@
 
 package org.apache.arrow.dataset.file;
 
-import org.apache.arrow.dataset.jni.JniBasedContext;
-import org.apache.arrow.dataset.jni.JniBasedDataSource;
+import org.apache.arrow.dataset.jni.JniBasedDataSourceDiscovery;
 import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.vector.types.pojo.Schema;
 
-import java.nio.ByteBuffer;
 import java.util.List;
 
-public class FileSetDataSource extends JniBasedDataSource {
+public class FileSetDataSourceDiscovery extends JniBasedDataSourceDiscovery {
 
-  public FileSetDataSource(BufferAllocator allocator, FileFormat format, FileSystem fs, List<String> paths) {
-    super(new JniBasedContext(inspectSchema(format, fs, paths), allocator), makeSource(format, fs, paths));
+  public FileSetDataSourceDiscovery(BufferAllocator allocator, FileFormat format, FileSystem fs, List<String> paths) {
+    super(allocator, createNative(format, fs, paths));
 
   }
 
-  private static long makeSource(FileFormat format, FileSystem fs, List<String> paths) {
-    return JniWrapper.get().makeSource(toPathArray(paths), format.id(), fs.id());
-  }
-
-  private static Schema inspectSchema(FileFormat format, FileSystem fs, List<String> paths) {
-    return Schema.deserialize(ByteBuffer.wrap(JniWrapper.get().getSchema(toPathArray(paths), format.id(), fs.id())));
+  private static long createNative(FileFormat format, FileSystem fs, List<String> paths) {
+    return JniWrapper.get().makeFileSetDataSourceDiscovery(toPathArray(paths), format.id(), fs.id());
   }
 
   private static String[] toPathArray(List<String> paths) {
     return paths.toArray(new String[0]);
   }
+
 }

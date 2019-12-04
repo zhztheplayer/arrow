@@ -27,6 +27,12 @@ public class JniWrapper {
 
   private JniWrapper() {}
 
+  public native void closeDataSourceDiscovery(long dataSourceDiscoveryId);
+
+  public native byte[] inspectSchema(long dataSourceDiscoveryId);
+
+  public native long createDataSource(long dataSourceDiscoveryId);
+
   public native void closeDataSource(long dataSourceId);
 
   public native long[] getFragments(long dataSourceId, String[] columns, byte[] filter);
