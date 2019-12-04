@@ -31,13 +31,17 @@ public class JniWrapper {
 
   public native long[] getFragments(long dataSourceId, String[] columns, byte[] filter);
 
-  public native long[] scan(long fragmentId);
-
   public native void closeFragment(long fragmentId);
 
-  public native NativeRecordBatchHandle nextRecordBatch(long scanTaskId);
+  public native long[] getScanTasks(long fragmentId);
 
   public native void closeScanTask(long scanTaskId);
+
+  public native long scan(long scanTaskId);
+
+  public native void closeIterator(long id);
+
+  public native NativeRecordBatchHandle nextRecordBatch(long recordBatchIteratorId);
 
   public native void releaseBuffer(long bufferId);
 

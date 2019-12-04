@@ -7,19 +7,33 @@
 #include <arrow/filesystem/localfs.h>
 #include <arrow/filesystem/hdfs.h>
 #include <arrow/ipc/api.h>
+#include <arrow/util/iterator.h>
 #include "jni/concurrent_map.h"
 
 #include "org_apache_arrow_dataset_file_JniWrapper.h"
 #include "org_apache_arrow_dataset_jni_JniWrapper.h"
 
-static jclass io_exception_class;
 static jclass illegal_access_exception_class;
 static jclass illegal_argument_exception_class;
 static jclass runtime_exception_class;
 
+static jclass record_batch_handle_class;
+static jclass record_batch_handle_field_class;
+static jclass record_batch_handle_buffer_class;
+
+static jmethodID record_batch_handle_constructor;
+static jmethodID record_batch_handle_field_constructor;
+static jmethodID record_batch_handle_buffer_constructor;
+
 static jint JNI_VERSION = JNI_VERSION_1_6;
 
 using arrow::jni::ConcurrentMap;
+
+static ConcurrentMap<arrow::dataset::DataSourcePtr> data_source_holder_;
+static ConcurrentMap<arrow::dataset::DataFragmentPtr > data_fragment_holder_;
+static ConcurrentMap<arrow::dataset::ScanTaskPtr> scan_task_holder_;
+static ConcurrentMap<arrow::RecordBatchIterator> iterator_holder_;
+static ConcurrentMap<std::shared_ptr<arrow::Buffer>> buffer_holder_;
 
 jclass CreateGlobalClassReference(JNIEnv* env, const char* class_name) {
   jclass local_class = env->FindClass(class_name);
@@ -28,13 +42,22 @@ jclass CreateGlobalClassReference(JNIEnv* env, const char* class_name) {
   return global_class;
 }
 
+jmethodID GetMethodID(JNIEnv* env, jclass this_class, const char* name, const char* sig) {
+  jmethodID ret = env->GetMethodID(this_class, name, sig);
+  if (ret == nullptr) {
+    std::string error_message = "Unable to find method " + std::string(name) +
+        " within signature" + std::string(sig);
+    env->ThrowNew(illegal_access_exception_class, error_message.c_str());
+  }
+  return ret;
+}
+
 jint JNI_OnLoad(JavaVM* vm, void* reserved) {
   JNIEnv* env;
   if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION) != JNI_OK) {
     return JNI_ERR;
   }
 
-  io_exception_class = CreateGlobalClassReference(env, "Ljava/io/IOException;");
   illegal_access_exception_class =
       CreateGlobalClassReference(env, "Ljava/lang/IllegalAccessException;");
   illegal_argument_exception_class =
@@ -42,9 +65,50 @@ jint JNI_OnLoad(JavaVM* vm, void* reserved) {
   runtime_exception_class =
       CreateGlobalClassReference(env, "Ljava/lang/RuntimeException;");
 
+  record_batch_handle_class =
+      CreateGlobalClassReference(env, "Lorg.apache.arrow.dataset.jni/NativeRecordBatchHandle;");
+  record_batch_handle_field_class =
+      CreateGlobalClassReference(env, "Lorg.apache.arrow.dataset.jni/NativeRecordBatchHandle$Field;");
+  record_batch_handle_buffer_class =
+      CreateGlobalClassReference(env, "Lorg.apache.arrow.dataset.jni/NativeRecordBatchHandle$Buffer;");
+
+  record_batch_handle_constructor = GetMethodID(env, record_batch_handle_class, "<init>",
+                                                "(J[Lorg.apache.arrow.dataset.jni/NativeRecordBatchHandle$Field;"
+                                                "[Lorg.apache.arrow.dataset.jni/NativeRecordBatchHandle$Buffer;)V");
+  record_batch_handle_field_constructor = GetMethodID(env, record_batch_handle_field_class, "<init>",
+                                                      "(JJ)V");
+  record_batch_handle_buffer_constructor = GetMethodID(env, record_batch_handle_buffer_class, "<init>",
+                                                       "(JJJJ)V");
+
   env->ExceptionDescribe();
 
   return JNI_VERSION;
+}
+
+
+void JNI_OnUnload(JavaVM* vm, void* reserved) {
+  JNIEnv* env;
+  vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION);
+  env->DeleteGlobalRef(illegal_access_exception_class);
+  env->DeleteGlobalRef(illegal_argument_exception_class);
+  env->DeleteGlobalRef(runtime_exception_class);
+  env->DeleteGlobalRef(record_batch_handle_class);
+  env->DeleteGlobalRef(record_batch_handle_field_class);
+  env->DeleteGlobalRef(record_batch_handle_buffer_class);
+
+  data_source_holder_.Clear();
+  data_fragment_holder_.Clear();
+  scan_task_holder_.Clear();
+  iterator_holder_.Clear();
+}
+
+std::shared_ptr<arrow::Schema> SchemaFromColumnNames(
+    const std::shared_ptr<arrow::Schema>& input, const std::vector<std::string>& column_names) {
+  std::vector<std::shared_ptr<arrow::Field>> columns;
+  for (const auto& name : column_names) {
+    columns.push_back(input->GetFieldByName(name));
+  }
+  return std::make_shared<arrow::Schema>(columns);
 }
 
 std::shared_ptr<arrow::dataset::FileFormat> GetFileFormat(JNIEnv *env, jint id) {
@@ -78,7 +142,7 @@ std::string JStringToCString(JNIEnv* env, jstring string) {
   return std::string(buffer.data(), clen);
 }
 
-std::vector<std::string> ToStringVector(JNIEnv *env, jobjectArray str_array) {
+std::vector<std::string> ToStringVector(JNIEnv* env, jobjectArray& str_array) {
   int length = env->GetArrayLength(str_array);
   std::vector<std::string> vector;
   for (int i = 0; i < length; i++) {
@@ -88,13 +152,29 @@ std::vector<std::string> ToStringVector(JNIEnv *env, jobjectArray str_array) {
   return vector;
 }
 
+template <typename T>
+std::vector<T> collect(arrow::Iterator<T> itr) {
+  std::vector<T> vector;
+  T t;
+  do {
+    auto status = itr.Next(&t);
+    if (!status.ok()) {
+      return std::vector<T>(); // fixme
+    }
+    vector.push_back(t);
+  } while (t);
+  return vector;
+}
+
 /*
  * Class:     org_apache_arrow_dataset_jni_JniWrapper
  * Method:    closeDataSource
  * Signature: (J)V
  */
 JNIEXPORT void JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_closeDataSource
-    (JNIEnv *, jobject, jlong);
+    (JNIEnv *, jobject, jlong id) {
+  data_source_holder_.Erase(id);
+}
 
 /*
  * Class:     org_apache_arrow_dataset_jni_JniWrapper
@@ -102,15 +182,21 @@ JNIEXPORT void JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_closeDataSou
  * Signature: (J[Ljava/lang/String;[B)[J
  */
 JNIEXPORT jlongArray JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_getFragments
-    (JNIEnv *, jobject, jlong, jobjectArray, jbyteArray);
-
-/*
- * Class:     org_apache_arrow_dataset_jni_JniWrapper
- * Method:    scan
- * Signature: (J)[J
- */
-JNIEXPORT jlongArray JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_scan
-    (JNIEnv *, jobject, jlong);
+    (JNIEnv* env, jobject, jlong data_source_id, jobjectArray columns, jbyteArray filter) {
+  // todo consider filter buffer (the last param) which is currently ignored
+  arrow::dataset::DataSourcePtr data_source = data_source_holder_.Lookup(data_source_id);
+  arrow::dataset::ScanOptionsPtr scan_options = arrow::dataset::ScanOptions::Defaults();
+  std::vector<std::string> column_names = ToStringVector(env, columns);
+  arrow::dataset::DataFragmentIterator itr = data_source->GetFragments(scan_options);
+  std::vector<arrow::dataset::DataFragmentPtr> vector = collect(std::move(itr));
+  jlongArray ret = env->NewLongArray(vector.size());
+  for (unsigned long i = 0; i < vector.size(); i++) {
+    arrow::dataset::DataFragmentPtr data_fragment = vector.at(i);
+    jlong id[] = {data_fragment_holder_.Insert(data_fragment)};
+    env->SetLongArrayRegion(ret, i, i + 1, id);
+  }
+  return ret;
+}
 
 /*
  * Class:     org_apache_arrow_dataset_jni_JniWrapper
@@ -118,15 +204,29 @@ JNIEXPORT jlongArray JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_scan
  * Signature: (J)V
  */
 JNIEXPORT void JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_closeFragment
-    (JNIEnv *, jobject, jlong);
+    (JNIEnv *, jobject, jlong id) {
+  data_fragment_holder_.Erase(id);
+}
 
 /*
  * Class:     org_apache_arrow_dataset_jni_JniWrapper
- * Method:    nextRecordBatch
- * Signature: (J)Lorg/apache/arrow/dataset/jni/NativeRecordBatchHandle;
+ * Method:    getScanTasks
+ * Signature: (J)[J
  */
-JNIEXPORT jobject JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_nextRecordBatch
-    (JNIEnv *, jobject, jlong);
+JNIEXPORT jlongArray JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_getScanTasks
+    (JNIEnv* env, jobject, jlong fragment_id) {
+  arrow::dataset::DataFragmentPtr data_fragment = data_fragment_holder_.Lookup(fragment_id);
+  arrow::dataset::ScanTaskIterator itr = data_fragment->Scan(std::make_shared<arrow::dataset::ScanContext>())
+      .ValueOrDie(); // fixme ValueOrDie
+  std::vector<arrow::dataset::ScanTaskPtr> vector = collect(std::move(itr));
+  jlongArray ret = env->NewLongArray(vector.size());
+  for (unsigned long i = 0; i < vector.size(); i++) {
+    arrow::dataset::ScanTaskPtr scan_task = vector.at(i);
+    jlong id[] = {scan_task_holder_.Insert(scan_task)};
+    env->SetLongArrayRegion(ret, i, i + 1, id);
+  }
+  return ret;
+}
 
 /*
  * Class:     org_apache_arrow_dataset_jni_JniWrapper
@@ -134,7 +234,80 @@ JNIEXPORT jobject JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_nextRecor
  * Signature: (J)V
  */
 JNIEXPORT void JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_closeScanTask
-    (JNIEnv *, jobject, jlong);
+    (JNIEnv *, jobject, jlong id) {
+  scan_task_holder_.Erase(id);
+}
+
+/*
+ * Class:     org_apache_arrow_dataset_jni_JniWrapper
+ * Method:    scan
+ * Signature: (J)J
+ */
+JNIEXPORT jlong JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_scan
+    (JNIEnv *, jobject, jlong scan_task_id) {
+  arrow::dataset::ScanTaskPtr scan_task = scan_task_holder_.Lookup(scan_task_id);
+  arrow::RecordBatchIterator record_batch_iterator = scan_task->Scan().ValueOrDie(); // fixme ValueOrDie
+  return iterator_holder_.Insert(std::move(record_batch_iterator));
+}
+
+/*
+ * Class:     org_apache_arrow_dataset_jni_JniWrapper
+ * Method:    closeIterator
+ * Signature: (J)V
+ */
+JNIEXPORT void JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_closeIterator
+    (JNIEnv *, jobject, jlong id) {
+  iterator_holder_.Erase(id);
+}
+
+/*
+ * Class:     org_apache_arrow_dataset_jni_JniWrapper
+ * Method:    nextRecordBatch
+ * Signature: (J)Lorg/apache/arrow/dataset/jni/NativeRecordBatchHandle;
+ */
+JNIEXPORT jobject JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_nextRecordBatch
+    (JNIEnv* env, jobject, jlong iterator_id) {
+  arrow::RecordBatchIterator itr = iterator_holder_.Lookup(iterator_id);
+  std::shared_ptr<arrow::RecordBatch> record_batch;
+  auto status = itr.Next(&record_batch);
+  if (!status.ok()) {
+    return nullptr; // fixme throw an error
+  }
+  if (record_batch == nullptr) {
+    return nullptr; // stream ended
+  }
+  std::shared_ptr<arrow::Schema> schema = record_batch->schema();
+  jobjectArray field_array =
+      env->NewObjectArray(schema->num_fields(), record_batch_handle_field_class, nullptr);
+
+  std::vector<std::shared_ptr<arrow::Buffer>> buffers;
+  for (int i = 0; i < schema->num_fields(); ++i) {
+    auto column = record_batch->column(i);
+    auto dataArray = column->data();
+    jobject field = env->NewObject(record_batch_handle_field_class, record_batch_handle_field_constructor,
+                                   column->length(), column->null_count());
+    env->SetObjectArrayElement(field_array, i, field);
+
+    for (auto& buffer : dataArray->buffers) {
+      buffers.push_back(buffer);
+    }
+  }
+
+  jobjectArray buffer_array =
+      env->NewObjectArray(buffers.size(), record_batch_handle_buffer_class, nullptr);
+
+  for (size_t j = 0; j < buffers.size(); ++j) {
+    auto buffer = buffers[j];
+    jobject buffer_handle = env->NewObject(record_batch_handle_buffer_class, record_batch_handle_buffer_constructor,
+                                           buffer_holder_.Insert(buffer), buffer->data(),
+                                           buffer->size(), buffer->capacity());
+    env->SetObjectArrayElement(buffer_array, j, buffer_handle);
+  }
+
+  jobject ret = env->NewObject(record_batch_handle_class, record_batch_handle_constructor,
+                               record_batch->num_rows(), field_array, buffer_array);
+  return ret;
+}
 
 /*
  * Class:     org_apache_arrow_dataset_jni_JniWrapper
@@ -150,7 +323,14 @@ JNIEXPORT void JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_releaseBuffe
  * Signature: ([Ljava/lang/String;II)J
  */
 JNIEXPORT jlong JNICALL Java_org_apache_arrow_dataset_file_JniWrapper_makeSource
-        (JNIEnv *, jobject, jobjectArray, jint, jint);
+    (JNIEnv* env, jobject, jobjectArray paths, jint file_format_id, jint file_system_id) {
+  std::shared_ptr<arrow::dataset::FileFormat> file_format = GetFileFormat(env, file_format_id);
+  arrow::fs::FileSystemPtr fs = GetFileSystem(env, file_system_id);
+  std::vector<std::string> path_vector = ToStringVector(env, paths);
+  std::shared_ptr<arrow::dataset::DataSource>
+      s = arrow::dataset::FileSetDataSource::Make(path_vector, fs, file_format).ValueOrDie();// fixme ValueOrDie
+  return data_source_holder_.Insert(s);
+}
 
 /*
  * Class:     org_apache_arrow_dataset_file_JniWrapper
@@ -158,16 +338,16 @@ JNIEXPORT jlong JNICALL Java_org_apache_arrow_dataset_file_JniWrapper_makeSource
  * Signature: ([Ljava/lang/String;II)[B
  */
 JNIEXPORT jbyteArray JNICALL Java_org_apache_arrow_dataset_file_JniWrapper_getSchema
-        (JNIEnv *env, jobject, jobjectArray paths, jint file_format_id, jint file_system_id) {
+    (JNIEnv *env, jobject, jobjectArray paths, jint file_format_id, jint file_system_id) {
   std::shared_ptr<arrow::dataset::FileFormat> file_format = GetFileFormat(env, file_format_id);
   std::shared_ptr<arrow::fs::FileSystem> fs = GetFileSystem(env, file_system_id);
   std::vector<std::string> path_vector = ToStringVector(env, paths);
   std::vector<std::shared_ptr<arrow::dataset::FileSource>> file_srcs;
-  for (const auto& path : path_vector) {
+  for (const auto &path : path_vector) {
     std::shared_ptr<arrow::dataset::FileSource> file_src = std::make_shared<arrow::dataset::FileSource>(path, fs.get());
     file_srcs.push_back(std::move(file_src));
   }
-  std::shared_ptr<arrow::Schema> schema = file_format->Inspect(*file_srcs.at(0)).ValueOrDie();
+  std::shared_ptr<arrow::Schema> schema = file_format->Inspect(*file_srcs.at(0)).ValueOrDie();// fixme ValueOrDie
 
   std::shared_ptr<arrow::Buffer> out;
 
@@ -179,7 +359,7 @@ JNIEXPORT jbyteArray JNICALL Java_org_apache_arrow_dataset_file_JniWrapper_getSc
   }
 
   jbyteArray ret = env->NewByteArray(out->size());
-  auto src = reinterpret_cast<const jbyte*>(out->data());
+  auto src = reinterpret_cast<const jbyte *>(out->data());
   env->SetByteArrayRegion(ret, 0, out->size(), src);
   return ret;
 }

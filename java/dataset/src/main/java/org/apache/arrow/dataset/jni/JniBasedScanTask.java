@@ -35,19 +35,17 @@ import java.util.stream.Collectors;
 public class JniBasedScanTask implements ScanTask, AutoCloseable {
   private final JniBasedContext context;
   private final long scanTaskId;
-  private final Reader in;
 
   public JniBasedScanTask(JniBasedContext context, long scanTaskId) {
     this.context = context;
     this.scanTaskId = scanTaskId;
-    this.in = new Reader();
   }
 
   @Override
   public Iterable<? extends VectorSchemaRoot> scan() {
 
     return () -> new Iterator<VectorSchemaRoot>() {
-
+      Reader in = new Reader(JniWrapper.get().scan(scanTaskId));
       VectorSchemaRoot peek = null;
 
       @Override
@@ -87,13 +85,16 @@ public class JniBasedScanTask implements ScanTask, AutoCloseable {
 
   private class Reader extends ArrowReader {
 
-    Reader() {
+    private final long recordBatchIteratorId;
+
+    Reader(long recordBatchIteratorId) {
       super(context.getAllocator());
+      this.recordBatchIteratorId = recordBatchIteratorId;
     }
 
     @Override
     public boolean loadNextBatch() throws IOException {
-      NativeRecordBatchHandle handle = JniWrapper.get().nextRecordBatch(scanTaskId);
+      NativeRecordBatchHandle handle = JniWrapper.get().nextRecordBatch(recordBatchIteratorId);
       if (handle == null) {
         return false;
       }
@@ -121,12 +122,14 @@ public class JniBasedScanTask implements ScanTask, AutoCloseable {
 
     @Override
     protected void closeReadSource() throws IOException {
-      throw new UnsupportedOperationException();
+      JniWrapper.get().closeIterator(recordBatchIteratorId);
     }
 
     @Override
     protected Schema readSchema() throws IOException {
       return context.getSchema();
     }
+
+
   }
 }

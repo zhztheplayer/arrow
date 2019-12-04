@@ -145,6 +145,7 @@ Result<DataSourcePtr> FileSetDataSource::Make(const std::vector<std::string>& pa
   return DataSourcePtr(
       new FileSetDataSource(file_srcs, std::move(format)));
 }
+
 Result<DataSourcePtr> FileSetDataSource::Make(FileSourceVector files, FileFormatPtr format) {
   return DataSourcePtr(new FileSetDataSource(std::move(files), std::move(format)));
 }

@@ -34,7 +34,7 @@ public class JniBasedDataFragment implements DataFragment, AutoCloseable {
 
   @Override
   public Iterable<? extends ScanTask> scan() {
-    return LongStream.of(JniWrapper.get().scan(fragmentId))
+    return LongStream.of(JniWrapper.get().getScanTasks(fragmentId))
       .mapToObj(id -> new JniBasedScanTask(context, id))
       .collect(Collectors.toList());
   }
