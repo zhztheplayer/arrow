@@ -20,6 +20,12 @@
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>arrow-dataset</artifactId>
+    <name>Arrow Java Datasets</name>
+    <description>Java implementation of Arrow Datasets API/Framework</description>
+    <packaging>jar</packaging>
+    <properties>
+        <arrow.cpp.build.dir>../../../cpp/release-build/</arrow.cpp.build.dir>
+    </properties>
 
     <dependencies>
         <dependency>
@@ -36,5 +42,15 @@
             <scope>compile</scope>
         </dependency>
     </dependencies>
+    <build>
+        <resources>
+            <resource>
+                <directory>${arrow.cpp.build.dir}</directory>
+                <includes>
+                    <include>**/libarrow_dataset_jni.*</include>
+                </includes>
+            </resource>
+        </resources>
+    </build>
 
 </project>

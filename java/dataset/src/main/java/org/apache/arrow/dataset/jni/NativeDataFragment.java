@@ -17,33 +17,30 @@
 
 package org.apache.arrow.dataset.jni;
 
-import org.apache.arrow.dataset.datasource.DataSource;
 import org.apache.arrow.dataset.fragment.DataFragment;
-import org.apache.arrow.dataset.scanner.ScanOptions;
+import org.apache.arrow.dataset.scanner.ScanTask;
 
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
-public class JniBasedDataSource implements DataSource, AutoCloseable {
+public class NativeDataFragment implements DataFragment, AutoCloseable {
+  private final NativeContext context;
+  private final long fragmentId;
 
-  private final JniBasedContext context;
-  private final long dataSourceId;
-
-  public JniBasedDataSource(JniBasedContext context, long dataSourceId) {
+  public NativeDataFragment(NativeContext context, long fragmentId) {
     this.context = context;
-    this.dataSourceId = dataSourceId;
+    this.fragmentId = fragmentId;
   }
 
   @Override
-  public Iterable<? extends DataFragment> getFragments(ScanOptions options) {
-    return LongStream.of(JniWrapper.get()
-      .getFragments(dataSourceId, options.getColumns(), options.getFilter().toByteArray()))
-      .mapToObj(id -> new JniBasedDataFragment(context, id))
+  public Iterable<? extends ScanTask> scan() {
+    return LongStream.of(JniWrapper.get().getScanTasks(fragmentId))
+      .mapToObj(id -> new NativeScanTask(context, id))
       .collect(Collectors.toList());
   }
 
   @Override
   public void close() throws Exception {
-    JniWrapper.get().closeDataSource(dataSourceId);
+    JniWrapper.get().closeFragment(fragmentId);
   }
 }

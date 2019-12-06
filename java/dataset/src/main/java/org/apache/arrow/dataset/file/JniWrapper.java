@@ -17,6 +17,8 @@
 
 package org.apache.arrow.dataset.file;
 
+import org.apache.arrow.dataset.jni.JniLoader;
+
 public class JniWrapper {
 
   private static final JniWrapper INSTANCE = new JniWrapper();
@@ -26,7 +28,7 @@ public class JniWrapper {
   }
 
   private JniWrapper() {
-    
+    JniLoader.get().ensureLoaded();
   }
 
   public native long makeFileSetDataSourceDiscovery(String[] paths, int fileFormat, int fileSystem);

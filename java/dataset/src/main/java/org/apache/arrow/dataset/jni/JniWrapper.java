@@ -25,8 +25,9 @@ public class JniWrapper {
     return INSTANCE;
   }
 
-  private JniWrapper() {}
-
+  private JniWrapper() {
+    JniLoader.get().ensureLoaded();
+  }
   public native void closeDataSourceDiscovery(long dataSourceDiscoveryId);
 
   public native byte[] inspectSchema(long dataSourceDiscoveryId);

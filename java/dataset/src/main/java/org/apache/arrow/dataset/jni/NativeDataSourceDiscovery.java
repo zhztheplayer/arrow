@@ -24,11 +24,11 @@ import org.apache.arrow.vector.types.pojo.Schema;
 
 import java.nio.ByteBuffer;
 
-public class JniBasedDataSourceDiscovery implements DataSourceDiscovery, AutoCloseable {
+public class NativeDataSourceDiscovery implements DataSourceDiscovery, AutoCloseable {
   private final long dataSourceDiscoveryId;
   private final BufferAllocator allocator;
 
-  public JniBasedDataSourceDiscovery(BufferAllocator allocator, long dataSourceDiscoveryId) {
+  public NativeDataSourceDiscovery(BufferAllocator allocator, long dataSourceDiscoveryId) {
     this.allocator = allocator;
     this.dataSourceDiscoveryId = dataSourceDiscoveryId;
   }
@@ -39,7 +39,7 @@ public class JniBasedDataSourceDiscovery implements DataSourceDiscovery, AutoClo
 
   @Override
   public DataSource finish() {
-    return new JniBasedDataSource(new JniBasedContext(inspect(), allocator),
+    return new NativeDataSource(new NativeContext(inspect(), allocator),
       JniWrapper.get().createDataSource(dataSourceDiscoveryId));
   }
 

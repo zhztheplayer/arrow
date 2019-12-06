@@ -17,12 +17,12 @@
 
 package org.apache.arrow.dataset.file;
 
-import org.apache.arrow.dataset.jni.JniBasedDataSourceDiscovery;
+import org.apache.arrow.dataset.jni.NativeDataSourceDiscovery;
 import org.apache.arrow.memory.BufferAllocator;
 
 import java.util.List;
 
-public class FileSetDataSourceDiscovery extends JniBasedDataSourceDiscovery {
+public class FileSetDataSourceDiscovery extends NativeDataSourceDiscovery {
 
   public FileSetDataSourceDiscovery(BufferAllocator allocator, FileFormat format, FileSystem fs, List<String> paths) {
     super(allocator, createNative(format, fs, paths));

@@ -22,11 +22,11 @@ import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.util.Preconditions;
 import org.apache.arrow.vector.types.pojo.Schema;
 
-public class JniBasedContext {
+public class NativeContext {
   private final Schema schema;
   private final BufferAllocator allocator;
 
-  public JniBasedContext(Schema schema, BufferAllocator allocator) {
+  public NativeContext(Schema schema, BufferAllocator allocator) {
     Preconditions.checkArgument(allocator instanceof BaseAllocator,
       "currently only instance of BaseAllocator supported");
     this.schema = schema;

@@ -32,11 +32,11 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
 
-public class JniBasedScanTask implements ScanTask, AutoCloseable {
-  private final JniBasedContext context;
+public class NativeScanTask implements ScanTask, AutoCloseable {
+  private final NativeContext context;
   private final long scanTaskId;
 
-  public JniBasedScanTask(JniBasedContext context, long scanTaskId) {
+  public NativeScanTask(NativeContext context, long scanTaskId) {
     this.context = context;
     this.scanTaskId = scanTaskId;
   }
