@@ -23,11 +23,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class JniLoader {
   private static final JniLoader INSTANCE = new JniLoader();
-  private static final String LIBRARY_NAME = "arrow_dataset_jni";
+  private static final List<String> LIBRARY_NAMES = Collections.singletonList("arrow_dataset_jni");
 
   private AtomicBoolean loaded = new AtomicBoolean(false);
 
@@ -40,12 +42,12 @@ public final class JniLoader {
 
   public void ensureLoaded() {
     if (loaded.compareAndSet(false, true)) {
-      load();
+      LIBRARY_NAMES.forEach(this::load);
     }
   }
 
-  private void load() {
-    final String libraryToLoad = System.mapLibraryName(LIBRARY_NAME);
+  private void load(String name) {
+    final String libraryToLoad = System.mapLibraryName(name);
     try {
       File temp = File.createTempFile("jnilib-", ".tmp", new File(System.getProperty("java.io.tmpdir")));
       try (final InputStream is

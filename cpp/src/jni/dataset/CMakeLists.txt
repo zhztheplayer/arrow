@@ -33,6 +33,8 @@ add_subdirectory(../../../../java/dataset ./java)
 
 set(ARROW_BUILD_STATIC OFF)
 
+set(ARROW_DATASET_JNI_SHARED_PRIVATE_LINK_LIBS arrow_shared arrow_dataset_shared)
+
 add_arrow_lib(arrow_dataset_jni
         BUILD_SHARED
         SOURCES
@@ -40,7 +42,7 @@ add_arrow_lib(arrow_dataset_jni
         OUTPUTS
         ARROW_DATASET_JNI_LIBRARIES
         SHARED_PRIVATE_LINK_LIBS
-        arrow_static
+        ${ARROW_DATASET_JNI_SHARED_PRIVATE_LINK_LIBS}
         EXTRA_INCLUDES
         ${JNI_HEADERS_DIR}
         PRIVATE_INCLUDES

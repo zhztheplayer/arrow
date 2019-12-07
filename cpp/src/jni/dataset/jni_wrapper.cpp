@@ -18,7 +18,6 @@
 #include <arrow/dataset/file_base.h>
 #include <arrow/dataset/api.h>
 #include <arrow/filesystem/localfs.h>
-#include <arrow/filesystem/hdfs.h>
 #include <arrow/ipc/api.h>
 #include <arrow/util/iterator.h>
 #include "jni/concurrent_map.h"
