@@ -146,11 +146,11 @@ Result<DataSourceDiscoveryPtr> FileSetDataSourceDiscovery::Make(FileSourceVector
 }
 
 Result<DataSourceDiscoveryPtr> FileSetDataSourceDiscovery::Make(std::vector<std::string> paths,
-                                                       fs::FileSystemPtr fs,
+                                                       fs::FileSystem* fs,
                                                        FileFormatPtr format) {
   FileSourceVector file_srcs;
   for (const auto& path : paths) {
-    std::shared_ptr<FileSource> file_src = std::make_shared<FileSource>(path, fs.get());
+    std::shared_ptr<FileSource> file_src = std::make_shared<FileSource>(path, fs);
     file_srcs.push_back(std::move(file_src));
   }
   return DataSourceDiscoveryPtr(new FileSetDataSourceDiscovery(std::move(file_srcs), std::move(format)));

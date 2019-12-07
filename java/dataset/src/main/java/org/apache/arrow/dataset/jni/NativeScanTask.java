@@ -94,6 +94,7 @@ public class NativeScanTask implements ScanTask, AutoCloseable {
 
     @Override
     public boolean loadNextBatch() throws IOException {
+      ensureInitialized(); // fixme it seems that the initialization is not thread-safe. Does caller already make it safe?
       NativeRecordBatchHandle handle = JniWrapper.get().nextRecordBatch(recordBatchIteratorId);
       if (handle == null) {
         return false;
@@ -101,13 +102,12 @@ public class NativeScanTask implements ScanTask, AutoCloseable {
       final ArrayList<ArrowBuf> buffers = new ArrayList<>();
       for (NativeRecordBatchHandle.Buffer buffer : handle.getBuffers()) {
         final BaseAllocator allocator = context.getAllocator();
-        final ReferenceManager rm = new NativeBufferLedger(allocator,
-          new NativeUnderlingMemory(allocator, (int) buffer.size, buffer.nativeInstanceId));
-
+        final NativeUnderlingMemory am = new NativeUnderlingMemory(allocator,
+            (int) buffer.size, buffer.nativeInstanceId);
+        final ReferenceManager rm = am.associate(allocator); // here we have ref count of 1
         ArrowBuf buf = new ArrowBuf(rm, null, (int) buffer.size, buffer.memoryAddress, false);
         buffers.add(buf);
       }
-
       loadRecordBatch(
         new ArrowRecordBatch((int) handle.getNumRows(), handle.getFields().stream()
           .map(field -> new ArrowFieldNode((int) field.length, (int) field.nullCount))

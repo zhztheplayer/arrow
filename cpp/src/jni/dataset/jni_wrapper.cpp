@@ -79,15 +79,15 @@ jint JNI_OnLoad(JavaVM* vm, void* reserved) {
       CreateGlobalClassReference(env, "Ljava/lang/RuntimeException;");
 
   record_batch_handle_class =
-      CreateGlobalClassReference(env, "Lorg.apache.arrow.dataset.jni/NativeRecordBatchHandle;");
+      CreateGlobalClassReference(env, "Lorg/apache/arrow/dataset/jni/NativeRecordBatchHandle;");
   record_batch_handle_field_class =
-      CreateGlobalClassReference(env, "Lorg.apache.arrow.dataset.jni/NativeRecordBatchHandle$Field;");
+      CreateGlobalClassReference(env, "Lorg/apache/arrow/dataset/jni/NativeRecordBatchHandle$Field;");
   record_batch_handle_buffer_class =
-      CreateGlobalClassReference(env, "Lorg.apache.arrow.dataset.jni/NativeRecordBatchHandle$Buffer;");
+      CreateGlobalClassReference(env, "Lorg/apache/arrow/dataset/jni/NativeRecordBatchHandle$Buffer;");
 
   record_batch_handle_constructor = GetMethodID(env, record_batch_handle_class, "<init>",
-                                                "(J[Lorg.apache.arrow.dataset.jni/NativeRecordBatchHandle$Field;"
-                                                "[Lorg.apache.arrow.dataset.jni/NativeRecordBatchHandle$Buffer;)V");
+                                                "(J[Lorg/apache/arrow/dataset/jni/NativeRecordBatchHandle$Field;"
+                                                "[Lorg/apache/arrow/dataset/jni/NativeRecordBatchHandle$Buffer;)V");
   record_batch_handle_field_constructor = GetMethodID(env, record_batch_handle_field_class, "<init>",
                                                       "(JJ)V");
   record_batch_handle_buffer_constructor = GetMethodID(env, record_batch_handle_buffer_class, "<init>",
@@ -136,10 +136,10 @@ std::shared_ptr<arrow::dataset::FileFormat> GetFileFormat(JNIEnv *env, jint id) 
   }
 }
 
-std::shared_ptr<arrow::fs::FileSystem> GetFileSystem(JNIEnv *env, jint id) {
+arrow::fs::FileSystem* GetFileSystem(JNIEnv *env, jint id) {
   switch (id) {
     case 0:
-      return std::make_shared<arrow::fs::LocalFileSystem>();
+      return new arrow::fs::LocalFileSystem();
     // case 1:
     //  return std::make_shared<arrow::fs::HadoopFileSystem>(); fixme passing with config
     default:
@@ -201,7 +201,7 @@ JNIEXPORT jbyteArray JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_inspec
     (JNIEnv* env, jobject, jlong data_source_discovery_id) {
   std::shared_ptr<arrow::dataset::DataSourceDiscovery> d
       = data_source_discovery_holder_.Lookup(data_source_discovery_id);
-  std::shared_ptr<arrow::Schema> schema = d->schema();
+  std::shared_ptr<arrow::Schema> schema = d->Inspect().ValueOrDie();// fixme ValueOrDie
 
   std::shared_ptr<arrow::Buffer> out;
 
@@ -252,13 +252,13 @@ JNIEXPORT jlongArray JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_getFra
   arrow::dataset::DataSourcePtr data_source = data_source_holder_.Lookup(data_source_id);
   arrow::dataset::ScanOptionsPtr scan_options = arrow::dataset::ScanOptions::Defaults();
   std::vector<std::string> column_names = ToStringVector(env, columns);
-  arrow::dataset::DataFragmentIterator itr = data_source->GetFragments(scan_options);
+  arrow::dataset::DataFragmentIterator itr = data_source->GetFragments(scan_options); // todo consider column names projector (and output schema should be kept up with)
   std::vector<arrow::dataset::DataFragmentPtr> vector = collect(std::move(itr));
   jlongArray ret = env->NewLongArray(vector.size());
   for (unsigned long i = 0; i < vector.size(); i++) {
     arrow::dataset::DataFragmentPtr data_fragment = vector.at(i);
     jlong id[] = {data_fragment_holder_.Insert(data_fragment)};
-    env->SetLongArrayRegion(ret, i, i + 1, id);
+    env->SetLongArrayRegion(ret, i, 1, id);
   }
   return ret;
 }
@@ -288,7 +288,7 @@ JNIEXPORT jlongArray JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_getSca
   for (unsigned long i = 0; i < vector.size(); i++) {
     arrow::dataset::ScanTaskPtr scan_task = vector.at(i);
     jlong id[] = {scan_task_holder_.Insert(scan_task)};
-    env->SetLongArrayRegion(ret, i, i + 1, id);
+    env->SetLongArrayRegion(ret, i, 1, id);
   }
   return ret;
 }
@@ -393,7 +393,7 @@ JNIEXPORT void JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_releaseBuffe
 JNIEXPORT jlong JNICALL Java_org_apache_arrow_dataset_file_JniWrapper_makeFileSetDataSourceDiscovery
     (JNIEnv* env, jobject, jobjectArray paths, jint file_format_id, jint file_system_id) {
   std::shared_ptr<arrow::dataset::FileFormat> file_format = GetFileFormat(env, file_format_id);
-  arrow::fs::FileSystemPtr fs = GetFileSystem(env, file_system_id);
+  arrow::fs::FileSystem* fs = GetFileSystem(env, file_system_id);
   std::vector<std::string> path_vector = ToStringVector(env, paths);
   std::shared_ptr<arrow::dataset::DataSourceDiscovery>
       d = arrow::dataset::FileSetDataSourceDiscovery::Make(path_vector, fs, file_format).ValueOrDie();// fixme ValueOrDie

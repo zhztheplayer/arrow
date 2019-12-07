@@ -178,7 +178,7 @@ class ARROW_DS_EXPORT FileSetDataSourceDiscovery : public DataSourceDiscovery {
 
   static Result<DataSourceDiscoveryPtr> Make(FileSourceVector files, FileFormatPtr format);
   static Result<DataSourceDiscoveryPtr> Make(std::vector<std::string> paths,
-                                    fs::FileSystemPtr fs,
+                                    fs::FileSystem* fs,
                                     FileFormatPtr format);
   Result<std::shared_ptr<Schema>> Inspect() override;
   Result<DataSourcePtr> Finish() override;

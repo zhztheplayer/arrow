@@ -32,6 +32,11 @@ public class NativeUnderlingMemory extends AllocationManagerBase {
   }
 
   @Override
+  public BufferLedger associate(BaseAllocator allocator) {
+    return super.associate(allocator);
+  }
+
+  @Override
   void release0() {
     JniWrapper.get().releaseBuffer(nativeInstanceId);
   }
