@@ -44,12 +44,11 @@ import org.junit.Test;
 
 public class NativeDataSourceTest {
 
-  @Test
-  public void testEndToEnd() {
-    String path = NativeDataSourceTest.class.getResource(File.separator + "users.parquet").getPath();
-    DataSourceDiscovery discovery = new FileSetDataSourceDiscovery(
-        new RootAllocator(Long.MAX_VALUE), FileFormat.PARQUET, FileSystem.LOCAL,
-        Collections.singletonList(path));
+  private String sampleParquet() {
+    return NativeDataSourceTest.class.getResource(File.separator + "users.parquet").getPath();
+  }
+
+  private void testDiscoveryEndToEnd(DataSourceDiscovery discovery) {
     Schema schema = discovery.inspect();
 
     Assert.assertEquals("Schema<name: Utf8 not null, favorite_color: Utf8, favorite_numbers: List<array: " +
@@ -72,6 +71,24 @@ public class NativeDataSourceTest {
     ScanTask scanTask = scanTasks.get(0);
     List<? extends VectorSchemaRoot> data = collect(scanTask.scan()); // fixme it seems c++ parquet reader doesn't create buffers for list field it self, as a result Java side buffer pointer gets out of bound.
     Assert.assertNotNull(data);
+  }
+
+  @Test
+  public void testLocalFs() {
+    String path = sampleParquet();
+    DataSourceDiscovery discovery = new FileSetDataSourceDiscovery(
+        new RootAllocator(Long.MAX_VALUE), FileFormat.PARQUET, FileSystem.LOCAL,
+        Collections.singletonList(path));
+    testDiscoveryEndToEnd(discovery);
+  }
+
+  @Test
+  public void testHdfs() {
+    String path = "hdfs:" + sampleParquet();
+    DataSourceDiscovery discovery = new FileSetDataSourceDiscovery(
+        new RootAllocator(Long.MAX_VALUE), FileFormat.PARQUET, FileSystem.HDFS,
+        Collections.singletonList(path));
+    testDiscoveryEndToEnd(discovery);
   }
 
   public void testScanner() {

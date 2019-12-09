@@ -20,6 +20,7 @@
 #include <arrow/filesystem/localfs.h>
 #include <arrow/ipc/api.h>
 #include <arrow/util/iterator.h>
+#include <arrow/filesystem/hdfs.h>
 #include "jni/concurrent_map.h"
 
 #include "org_apache_arrow_dataset_file_JniWrapper.h"
@@ -140,8 +141,10 @@ arrow::fs::FileSystem* GetFileSystem(JNIEnv *env, jint id) {
   switch (id) {
     case 0:
       return new arrow::fs::LocalFileSystem();
-    // case 1:
-    //  return std::make_shared<arrow::fs::HadoopFileSystem>(); fixme passing with config
+     case 1: {
+       auto* options = new arrow::fs::HdfsOptions;
+       return new arrow::fs::HadoopFileSystem(*options); // mem leak?
+     }
     default:
       std::string error_message = "illegal filesystem id: " + std::to_string(id);
       env->ThrowNew(illegal_argument_exception_class, error_message.c_str());
