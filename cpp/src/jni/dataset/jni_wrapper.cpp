@@ -143,7 +143,7 @@ arrow::fs::FileSystem* GetFileSystem(JNIEnv *env, jint id) {
     // case 1:
     //  return std::make_shared<arrow::fs::HadoopFileSystem>(); fixme passing with config
     default:
-      std::string error_message = "illegal file format id: " + std::to_string(id);
+      std::string error_message = "illegal filesystem id: " + std::to_string(id);
       env->ThrowNew(illegal_argument_exception_class, error_message.c_str());
       return nullptr; // unreachable
   }

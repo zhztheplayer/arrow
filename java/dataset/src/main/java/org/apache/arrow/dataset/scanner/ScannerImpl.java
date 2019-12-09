@@ -33,7 +33,7 @@ public class ScannerImpl implements Scanner {
   }
 
   @Override
-  public Iterable<? extends ScanTask> Scan() {
+  public Iterable<? extends ScanTask> scan() {
     // flat all scan tasks
     return sources.stream()
       .flatMap(s -> StreamSupport.stream(s.getFragments(options).spliterator(), false))

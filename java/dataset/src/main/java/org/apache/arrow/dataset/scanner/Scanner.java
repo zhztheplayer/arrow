@@ -19,6 +19,6 @@ package org.apache.arrow.dataset.scanner;
 
 public interface Scanner extends AutoCloseable {
 
-  Iterable<? extends ScanTask> Scan();
+  Iterable<? extends ScanTask> scan();
 
 }
