@@ -176,19 +176,23 @@ class ARROW_DS_EXPORT FileSystemDataSourceDiscovery : public DataSourceDiscovery
 class ARROW_DS_EXPORT FileSetDataSourceDiscovery : public DataSourceDiscovery {
  public:
 
-  static Result<DataSourceDiscoveryPtr> Make(FileSourceVector files, FileFormatPtr format);
+  static Result<DataSourceDiscoveryPtr> Make(FileSourceVector files,
+                                             fs::FileSystemPtr fs,
+                                             FileFormatPtr format);
+
   static Result<DataSourceDiscoveryPtr> Make(std::vector<std::string> paths,
-                                    fs::FileSystem* fs,
-                                    FileFormatPtr format);
+                                             fs::FileSystemPtr fs,
+                                             FileFormatPtr format);
   Result<std::shared_ptr<Schema>> Inspect() override;
   Result<DataSourcePtr> Finish() override;
 
  protected:
-  FileSetDataSourceDiscovery(FileSourceVector files, FileFormatPtr format);
+  FileSetDataSourceDiscovery(FileSourceVector files, FileFormatPtr format, fs::FileSystemPtr fs);
 
  private:
   FileSourceVector files_;
   FileFormatPtr format_;
+  fs::FileSystemPtr fs_;
 };
 
 }  // namespace dataset

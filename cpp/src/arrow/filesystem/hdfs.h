@@ -91,9 +91,6 @@ class ARROW_EXPORT HadoopFileSystem : public FileSystem {
   /// Create a HdfsFileSystem instance from the given options.
   static Result<std::shared_ptr<HadoopFileSystem>> Make(const HdfsOptions& options);
 
-  /// Return a normal pointer to HdfsFileSystem instance created from the given options.
-  static Result<HadoopFileSystem*> MakeP(const HdfsOptions& options);
-
  protected:
   explicit HadoopFileSystem(const HdfsOptions& options);
 

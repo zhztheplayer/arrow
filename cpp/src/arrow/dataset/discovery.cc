@@ -138,22 +138,24 @@ Result<DataSourcePtr> FileSystemDataSourceDiscovery::Finish() {
                                     format_);
 }
 
-FileSetDataSourceDiscovery::FileSetDataSourceDiscovery(FileSourceVector files, FileFormatPtr format)
-    : files_(std::move(files)), format_(std::move(format)) {}
+FileSetDataSourceDiscovery::FileSetDataSourceDiscovery(FileSourceVector files, FileFormatPtr format, fs::FileSystemPtr fs)
+    : files_(std::move(files)), format_(std::move(format)), fs_(std::move(fs)) {}
 
-Result<DataSourceDiscoveryPtr> FileSetDataSourceDiscovery::Make(FileSourceVector files, FileFormatPtr format) {
-  return DataSourceDiscoveryPtr(new FileSetDataSourceDiscovery(std::move(files), std::move(format)));
+Result<DataSourceDiscoveryPtr> FileSetDataSourceDiscovery::Make(FileSourceVector files,
+                                                                fs::FileSystemPtr fs,
+                                                                FileFormatPtr format) {
+  return DataSourceDiscoveryPtr(new FileSetDataSourceDiscovery(std::move(files), std::move(format), fs));
 }
 
 Result<DataSourceDiscoveryPtr> FileSetDataSourceDiscovery::Make(std::vector<std::string> paths,
-                                                       fs::FileSystem* fs,
-                                                       FileFormatPtr format) {
+                                                                fs::FileSystemPtr fs,
+                                                                FileFormatPtr format) {
   FileSourceVector file_srcs;
-  for (const auto& path : paths) {
+  for (const auto &path : paths) {
     std::shared_ptr<FileSource> file_src = std::make_shared<FileSource>(path, fs);
     file_srcs.push_back(std::move(file_src));
   }
-  return DataSourceDiscoveryPtr(new FileSetDataSourceDiscovery(std::move(file_srcs), std::move(format)));
+  return DataSourceDiscoveryPtr(new FileSetDataSourceDiscovery(std::move(file_srcs), std::move(format), fs));
 }
 
 Result<std::shared_ptr<Schema>> FileSetDataSourceDiscovery::Inspect() {
@@ -162,7 +164,7 @@ Result<std::shared_ptr<Schema>> FileSetDataSourceDiscovery::Inspect() {
 }
 
 Result<DataSourcePtr> FileSetDataSourceDiscovery::Finish() {
-  return FileSetDataSource::Make(files_, format_);
+  return FileSetDataSource::Make(files_, fs_, format_);
 }
 
 }  // namespace dataset

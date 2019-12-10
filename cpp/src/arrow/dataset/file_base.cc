@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "arrow/dataset/filter.h"
@@ -121,9 +122,10 @@ bool FileSystemDataSource::PartitionMatches(const fs::FileStats& stats,
   return true;
 }
 
-FileSetDataSource::FileSetDataSource(FileSourceVector files, FileFormatPtr format)
+FileSetDataSource::FileSetDataSource(FileSourceVector files, fs::FileSystemPtr fs, FileFormatPtr format)
     : files_(std::move(files)),
-      format_(std::move(format)) {}
+      format_(std::move(format)),
+      fs_(std::move(fs)){}
 
 DataFragmentIterator FileSetDataSource::GetFragmentsImpl(ScanOptionsPtr options) {
   auto file_srcs_it = MakeVectorIterator(std::move(files_));
@@ -143,11 +145,13 @@ Result<DataSourcePtr> FileSetDataSource::Make(std::vector<std::string> paths,
     file_srcs.push_back(std::move(file_src));
   }
   return DataSourcePtr(
-      new FileSetDataSource(file_srcs, std::move(format)));
+      new FileSetDataSource(std::move(file_srcs), std::move(fs), std::move(format)));
 }
 
-Result<DataSourcePtr> FileSetDataSource::Make(FileSourceVector files, FileFormatPtr format) {
-  return DataSourcePtr(new FileSetDataSource(std::move(files), std::move(format)));
+Result<DataSourcePtr> FileSetDataSource::Make(FileSourceVector files,
+                                              fs::FileSystemPtr fs,
+                                              FileFormatPtr format) {
+  return DataSourcePtr(new FileSetDataSource(std::move(files), std::move(fs), std::move(format)));
 }
 
 }  // namespace dataset

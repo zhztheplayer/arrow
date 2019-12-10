@@ -207,9 +207,11 @@ class ARROW_DS_EXPORT FileSystemDataSource : public DataSource {
 
 class ARROW_DS_EXPORT FileSetDataSource : public DataSource {
  public:
-  FileSetDataSource(FileSourceVector files, FileFormatPtr format);
+  FileSetDataSource(FileSourceVector files, fs::FileSystemPtr fs, FileFormatPtr format);
 
-  static Result<DataSourcePtr> Make(FileSourceVector files, FileFormatPtr format);
+  static Result<DataSourcePtr> Make(FileSourceVector files,
+                                    fs::FileSystemPtr fs,
+                                    FileFormatPtr format);
 
   static Result<DataSourcePtr> Make(std::vector<std::string> paths,
                                     fs::FileSystemPtr fs,
@@ -225,6 +227,7 @@ class ARROW_DS_EXPORT FileSetDataSource : public DataSource {
  private:
   FileSourceVector files_;
   FileFormatPtr format_;
+  fs::FileSystemPtr fs_;
 };
 
 }  // namespace dataset

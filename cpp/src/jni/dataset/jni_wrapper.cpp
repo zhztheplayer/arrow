@@ -137,14 +137,15 @@ std::shared_ptr<arrow::dataset::FileFormat> GetFileFormat(JNIEnv *env, jint id) 
   }
 }
 
-arrow::fs::FileSystem* GetFileSystem(JNIEnv *env, jint id) {
+arrow::fs::FileSystemPtr GetFileSystem(JNIEnv *env, jint id, std::vector<std::string> paths) {
   switch (id) {
     case 0:
-      return new arrow::fs::LocalFileSystem();
+      return std::make_shared<arrow::fs::LocalFileSystem>();
      case 1: {
-       auto* options = new arrow::fs::HdfsOptions;
-       arrow::fs::HadoopFileSystem *hdfs = arrow::fs::HadoopFileSystem::MakeP(*options).ValueOrDie(); // fixme ValueOrDie
-       return hdfs; // mem leak?
+       std::string path = paths.at(0); // fixme temporarily use the leading one of paths
+       arrow::fs::FileSystemPtr fs;
+       arrow::fs::FileSystemFromUri(path, &fs).ok(); // fixme call to ok()
+       return fs;
      }
     default:
       std::string error_message = "illegal filesystem id: " + std::to_string(id);
@@ -397,8 +398,8 @@ JNIEXPORT void JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_releaseBuffe
 JNIEXPORT jlong JNICALL Java_org_apache_arrow_dataset_file_JniWrapper_makeFileSetDataSourceDiscovery
     (JNIEnv* env, jobject, jobjectArray paths, jint file_format_id, jint file_system_id) {
   std::shared_ptr<arrow::dataset::FileFormat> file_format = GetFileFormat(env, file_format_id);
-  arrow::fs::FileSystem* fs = GetFileSystem(env, file_system_id);
   std::vector<std::string> path_vector = ToStringVector(env, paths);
+  arrow::fs::FileSystemPtr fs = GetFileSystem(env, file_system_id, path_vector);
   std::shared_ptr<arrow::dataset::DataSourceDiscovery>
       d = arrow::dataset::FileSetDataSourceDiscovery::Make(path_vector, fs, file_format).ValueOrDie();// fixme ValueOrDie
   return data_source_discovery_holder_.Insert(d);

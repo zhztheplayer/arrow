@@ -84,7 +84,7 @@ public class NativeDataSourceTest {
 
   @Test
   public void testHdfs() {
-    String path = "hdfs:" + sampleParquet();
+    String path = "hdfs://localhost:9000/" + sampleParquet();
     DataSourceDiscovery discovery = new FileSetDataSourceDiscovery(
         new RootAllocator(Long.MAX_VALUE), FileFormat.PARQUET, FileSystem.HDFS,
         Collections.singletonList(path));
