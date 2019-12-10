@@ -137,18 +137,30 @@ std::shared_ptr<arrow::dataset::FileFormat> GetFileFormat(JNIEnv *env, jint id) 
   }
 }
 
-arrow::fs::FileSystemPtr GetFileSystem(JNIEnv *env, jint id, std::vector<std::string> paths) {
+arrow::fs::FileSystemPtr GetFileSystem(JNIEnv *env, jint id, std::vector<std::string> paths,
+                                       std::vector<std::string> *out_paths) {
   switch (id) {
     case 0:
+      *out_paths = paths;
       return std::make_shared<arrow::fs::LocalFileSystem>();
-     case 1: {
-       std::string path = paths.at(0); // fixme temporarily use the leading one of paths
-       arrow::fs::FileSystemPtr fs;
-       arrow::fs::FileSystemFromUri(path, &fs).ok(); // fixme call to ok()
-       return fs;
-     }
-    default:
-      std::string error_message = "illegal filesystem id: " + std::to_string(id);
+    case 1: {
+      std::string p0 = paths.at(0); // fixme temporarily use the leading one of paths; how to check if their filesystems are equal in cpp?
+      arrow::fs::FileSystemPtr ret;
+      arrow::fs::FileSystemFromUri(p0, &ret).ok();
+      *out_paths = std::vector<std::string>();
+      for (const auto &path :paths) {
+        arrow::fs::FileSystemPtr fs;
+        std::string out_path;
+        arrow::Status status = arrow::fs::FileSystemFromUri(path, &fs, &out_path);
+        if (!status.ok()) {
+          std::string error_message = status.message();
+          env->ThrowNew(runtime_exception_class, error_message.c_str());
+        }
+        out_paths->push_back(std::move(out_path));
+      }
+      return ret;
+    }
+    default:std::string error_message = "illegal filesystem id: " + std::to_string(id);
       env->ThrowNew(illegal_argument_exception_class, error_message.c_str());
       return nullptr; // unreachable
   }
@@ -399,8 +411,9 @@ JNIEXPORT jlong JNICALL Java_org_apache_arrow_dataset_file_JniWrapper_makeFileSe
     (JNIEnv* env, jobject, jobjectArray paths, jint file_format_id, jint file_system_id) {
   std::shared_ptr<arrow::dataset::FileFormat> file_format = GetFileFormat(env, file_format_id);
   std::vector<std::string> path_vector = ToStringVector(env, paths);
-  arrow::fs::FileSystemPtr fs = GetFileSystem(env, file_system_id, path_vector);
+  std::vector<std::string> out_paths;
+  arrow::fs::FileSystemPtr fs = GetFileSystem(env, file_system_id, path_vector, &out_paths);
   std::shared_ptr<arrow::dataset::DataSourceDiscovery>
-      d = arrow::dataset::FileSetDataSourceDiscovery::Make(path_vector, fs, file_format).ValueOrDie();// fixme ValueOrDie
+      d = arrow::dataset::FileSetDataSourceDiscovery::Make(out_paths, fs, file_format).ValueOrDie();// fixme ValueOrDie
   return data_source_discovery_holder_.Insert(d);
 }
