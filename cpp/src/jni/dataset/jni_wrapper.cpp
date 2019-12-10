@@ -189,13 +189,16 @@ template <typename T>
 std::vector<T> collect(arrow::Iterator<T> itr) {
   std::vector<T> vector;
   T t;
-  do {
+  while(true) {
     auto status = itr.Next(&t);
     if (!status.ok()) {
       return std::vector<T>(); // fixme
     }
+    if (!t) {
+      break;
+    }
     vector.push_back(t);
-  } while (t);
+  }
   return vector;
 }
 
