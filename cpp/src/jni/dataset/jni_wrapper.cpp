@@ -143,7 +143,8 @@ arrow::fs::FileSystem* GetFileSystem(JNIEnv *env, jint id) {
       return new arrow::fs::LocalFileSystem();
      case 1: {
        auto* options = new arrow::fs::HdfsOptions;
-       return new arrow::fs::HadoopFileSystem(*options); // mem leak?
+       arrow::fs::HadoopFileSystem *hdfs = arrow::fs::HadoopFileSystem::MakeP(*options).ValueOrDie(); // fixme ValueOrDie
+       return hdfs; // mem leak?
      }
     default:
       std::string error_message = "illegal filesystem id: " + std::to_string(id);

@@ -351,6 +351,12 @@ Result<std::shared_ptr<HadoopFileSystem>> HadoopFileSystem::Make(
   return ptr;
 }
 
+Result<HadoopFileSystem*> HadoopFileSystem::MakeP(const HdfsOptions &options) {
+  auto *p = new HadoopFileSystem(options);
+  RETURN_NOT_OK(p->impl_->Init());
+  return p;
+}
+
 Result<FileStats> HadoopFileSystem::GetTargetStats(const std::string& path) {
   return impl_->GetTargetStats(path);
 }
