@@ -38,6 +38,7 @@ public class NativeDataSourceDiscovery implements DataSourceDiscovery, AutoClose
     this.allocator = allocator;
     this.dataSourceDiscoveryId = dataSourceDiscoveryId;
   }
+
   @Override
   public Schema inspect() {
     byte[] buffer = JniWrapper.get().inspectSchema(dataSourceDiscoveryId);
