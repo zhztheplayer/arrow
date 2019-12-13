@@ -67,6 +67,9 @@ class ARROW_DS_EXPORT ScanOptions {
   // Projector for reconciling the final RecordBatch to the requested schema.
   std::shared_ptr<RecordBatchProjector> projector;
 
+  // Maximum row count for each record batch
+  int64_t batch_size;
+
  private:
   ScanOptions();
 };

@@ -18,10 +18,7 @@
 package org.apache.arrow.dataset.jni;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -37,7 +34,6 @@ import org.apache.arrow.dataset.scanner.ScanOptions;
 import org.apache.arrow.dataset.scanner.ScanTask;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
-import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.junit.Assert;
 import org.junit.Test;
@@ -45,32 +41,40 @@ import org.junit.Test;
 public class NativeDataSourceTest {
 
   private String sampleParquet() {
-    return NativeDataSourceTest.class.getResource(File.separator + "users.parquet").getPath();
+    return NativeDataSourceTest.class.getResource(File.separator + "userdata1.parquet").getPath();
   }
 
   private void testDiscoveryEndToEnd(DataSourceDiscovery discovery) {
     Schema schema = discovery.inspect();
 
-    Assert.assertEquals("Schema<name: Utf8 not null, favorite_color: Utf8, favorite_numbers: List<array: " +
-        "Int(32, true) not null> not null>(metadata: {avro.schema={\"type\":\"record\",\"name\":\"User\"," +
-        "\"namespace\":\"example.avro\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"}," +
-        "{\"name\":\"favorite_color\",\"type\":[\"string\",\"null\"]},{\"name\":\"favorite_numbers\"," +
-        "\"type\":{\"type\":\"array\",\"items\":\"int\"}}]}})", schema.toString());
+    Assert.assertEquals("Schema<registration_dttm: Timestamp(NANOSECOND, null), id: Int(32, true), " +
+        "first_name: Utf8, last_name: Utf8, email: Utf8, gender: Utf8, ip_address: Utf8, cc: Utf8, " +
+        "country: Utf8, birthdate: Utf8, salary: FloatingPoint(DOUBLE), title: Utf8, comments: Utf8>",
+        schema.toString());
 
     DataSource dataSource = discovery.finish();
     Assert.assertNotNull(dataSource);
 
     List<? extends DataFragment> fragments = collect(
-        dataSource.getFragments(new ScanOptions(new String[0], Filter.EMPTY)));
-    Assert.assertEquals(2, fragments.size());
+        dataSource.getFragments(new ScanOptions(new String[0], Filter.EMPTY, 100)));
+    Assert.assertEquals(1, fragments.size());
 
     DataFragment fragment = fragments.get(0);
     List<? extends ScanTask> scanTasks = collect(fragment.scan());
-    Assert.assertEquals(2, scanTasks.size());
+    Assert.assertEquals(1, scanTasks.size());
 
     ScanTask scanTask = scanTasks.get(0);
-    List<? extends VectorSchemaRoot> data = collect(scanTask.scan()); // fixme it seems c++ parquet reader doesn't create buffers for list field it self, as a result Java side buffer pointer gets out of bound.
+    List<? extends VectorSchemaRoot> data = collect(scanTask.scan());
     Assert.assertNotNull(data);
+    // 1000 rows total in file userdata1.parquet
+    Assert.assertEquals(10, data.size());
+    VectorSchemaRoot vsr = data.get(0);
+    Assert.assertEquals(100, vsr.getRowCount());
+
+
+    // FIXME when using list field:
+    // FIXME it seems c++ parquet reader doesn't create buffers for list field it self,
+    // FIXME as a result Java side buffer pointer gets out of bound.
   }
 
   @Test
@@ -83,12 +87,17 @@ public class NativeDataSourceTest {
   }
 
   @Test
-  public void testHdfs() {
+  public void testHdfsWithFileProtocol() {
     String path = "file:" + sampleParquet();
     DataSourceDiscovery discovery = new FileSetDataSourceDiscovery(
         new RootAllocator(Long.MAX_VALUE), FileFormat.PARQUET, FileSystem.HDFS,
         Collections.singletonList(path));
     testDiscoveryEndToEnd(discovery);
+  }
+
+  @Test
+  public void testHdfsWithHdfsProtocol() {
+    // todo
   }
 
   public void testScanner() {

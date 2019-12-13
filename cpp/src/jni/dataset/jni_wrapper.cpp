@@ -167,12 +167,12 @@ arrow::fs::FileSystemPtr GetFileSystem(JNIEnv *env, jint id, std::vector<std::st
 }
 
 std::string JStringToCString(JNIEnv* env, jstring string) {
-  int32_t jlen, clen;
-  clen = env->GetStringUTFLength(string);
-  jlen = env->GetStringLength(string);
-  std::vector<char> buffer(clen);
-  env->GetStringUTFRegion(string, 0, jlen, buffer.data());
-  return std::string(buffer.data(), clen);
+  jboolean copied;
+  int32_t length = env->GetStringUTFLength(string);
+  const char *chars = env->GetStringUTFChars(string, &copied);
+  std::string str = std::string(chars, length);
+  // fixme calling ReleaseStringUTFChars if memory leak faced
+  return str;
 }
 
 std::vector<std::string> ToStringVector(JNIEnv* env, jobjectArray& str_array) {
@@ -267,10 +267,11 @@ JNIEXPORT void JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_closeDataSou
  * Signature: (J[Ljava/lang/String;[B)[J
  */
 JNIEXPORT jlongArray JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_getFragments
-    (JNIEnv* env, jobject, jlong data_source_id, jobjectArray columns, jbyteArray filter) {
+    (JNIEnv* env, jobject, jlong data_source_id, jobjectArray columns, jbyteArray filter, jlong batch_size) {
   // todo consider filter buffer (the last param) which is currently ignored
   arrow::dataset::DataSourcePtr data_source = data_source_holder_.Lookup(data_source_id);
   arrow::dataset::ScanOptionsPtr scan_options = arrow::dataset::ScanOptions::Defaults();
+  scan_options->batch_size = batch_size;
   std::vector<std::string> column_names = ToStringVector(env, columns);
   arrow::dataset::DataFragmentIterator itr = data_source->GetFragments(scan_options); // todo consider column names projector (and output schema should be kept up with)
   std::vector<arrow::dataset::DataFragmentPtr> vector = collect(std::move(itr));

@@ -22,10 +22,12 @@ import org.apache.arrow.dataset.filter.Filter;
 public class ScanOptions {
   private final String[] columns;
   private final Filter filter;
+  private final long batchSize;
 
-  public ScanOptions(String[] columns, Filter filter) {
+  public ScanOptions(String[] columns, Filter filter, long batchSize) {
     this.columns = columns;
     this.filter = filter;
+    this.batchSize = batchSize;
   }
 
   public String[] getColumns() {
@@ -34,5 +36,9 @@ public class ScanOptions {
 
   public Filter getFilter() {
     return filter;
+  }
+
+  public long getBatchSize() {
+    return batchSize;
   }
 }
