@@ -37,7 +37,7 @@ public class JniWrapper {
 
   public native void closeDataSource(long dataSourceId);
 
-  public native long[] getFragments(long dataSourceId, String[] columns, byte[] filter, long batchSize);
+  public native long[] getFragments(long dataSourceId, long batchSize);
 
   public native void closeFragment(long fragmentId);
 
@@ -52,5 +52,14 @@ public class JniWrapper {
   public native NativeRecordBatchHandle nextRecordBatch(long recordBatchIteratorId);
 
   public native void releaseBuffer(long bufferId);
+
+  public native long createScanner(long[] dataSourceIds, byte[] schema,
+                                   String[] columns, byte[] filter, long batchSize);
+
+  public native void closeScanner(long scannerId);
+
+  public native byte[] getSchemaFromScanner(long scannerId);
+
+  public native long[] getScanTasksFromScanner(long scannerId);
 
 }

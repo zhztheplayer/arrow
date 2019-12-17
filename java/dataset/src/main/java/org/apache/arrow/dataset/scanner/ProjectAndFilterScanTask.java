@@ -15,38 +15,28 @@
  * limitations under the License.
  */
 
-package org.apache.arrow.dataset.jni;
+package org.apache.arrow.dataset.scanner;
 
 import org.apache.arrow.dataset.filter.Filter;
-import org.apache.arrow.dataset.fragment.DataFragment;
-import org.apache.arrow.dataset.scanner.ProjectAndFilterScanTask;
-import org.apache.arrow.dataset.scanner.ScanTask;
+import org.apache.arrow.vector.VectorSchemaRoot;
 
-import java.util.stream.Collectors;
-import java.util.stream.LongStream;
-
-public class NativeDataFragment implements DataFragment, AutoCloseable {
-  private final NativeContext context;
-  private final long fragmentId;
+/**
+ * Decorating an instance of {@link ScanTask} by having filters and projectors processed individually after scanning.
+ */
+public class ProjectAndFilterScanTask implements ScanTask {
+  private final ScanTask delegate;
   private final String[] columns;
   private final Filter filter;
 
-  public NativeDataFragment(NativeContext context, long fragmentId, String[] columns, Filter filter) {
-    this.context = context;
-    this.fragmentId = fragmentId;
+  public ProjectAndFilterScanTask(ScanTask delegate, String[] columns, Filter filter) {
+    this.delegate = delegate;
     this.columns = columns;
     this.filter = filter;
   }
 
   @Override
-  public Iterable<? extends ScanTask> scan() {
-    return LongStream.of(JniWrapper.get().getScanTasks(fragmentId))
-        .mapToObj(id -> new ProjectAndFilterScanTask(new NativeScanTask(context, id), columns, filter))
-        .collect(Collectors.toList());
-  }
-
-  @Override
-  public void close() throws Exception {
-    JniWrapper.get().closeFragment(fragmentId);
+  public Iterable<? extends VectorSchemaRoot> scan() {
+    // TODO UNIMPLEMENTED
+    return delegate.scan();
   }
 }

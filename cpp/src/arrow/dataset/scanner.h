@@ -137,6 +137,12 @@ class ARROW_DS_EXPORT Scanner {
   /// Scan result in memory before creating the Table.
   Result<std::shared_ptr<Table>> ToTable();
 
+  /// \brief Output schema of the Scanner with respect to projectors.
+  ///
+  /// Note this function was added temporarily to deal with the problem that ScanTask doesn't provide a schema.
+  /// We may move the function to a more reasonable place later.
+  Result<std::shared_ptr<Schema>> GetSchema();
+
  protected:
   /// \brief Return a TaskGroup according to ScanContext thread rules.
   std::shared_ptr<internal::TaskGroup> TaskGroup() const;
@@ -183,6 +189,9 @@ class ARROW_DS_EXPORT ScannerBuilder {
   /// \brief Indicate if the Scanner should make use of the available
   ///        ThreadPool found in ScanContext;
   Status UseThreads(bool use_threads = true);
+
+  /// \brief Batch size for generated scan tasks.
+  Status BatchSize(int64_t batch_size);
 
   /// \brief Return the constructed now-immutable Scanner object
   Result<ScannerPtr> Finish() const;

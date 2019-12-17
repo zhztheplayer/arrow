@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+import org.apache.arrow.dataset.Dataset;
 import org.apache.arrow.dataset.datasource.DataSource;
 import org.apache.arrow.dataset.datasource.DataSourceDiscovery;
 import org.apache.arrow.dataset.file.FileFormat;
@@ -38,10 +39,10 @@ import org.apache.arrow.vector.types.pojo.Schema;
 import org.junit.Assert;
 import org.junit.Test;
 
-public class NativeDataSourceTest {
+public class NativeDatasetTest {
 
   private String sampleParquet() {
-    return NativeDataSourceTest.class.getResource(File.separator + "userdata1.parquet").getPath();
+    return NativeDatasetTest.class.getResource(File.separator + "userdata1.parquet").getPath();
   }
 
   private void testDiscoveryEndToEnd(DataSourceDiscovery discovery) {
@@ -100,8 +101,31 @@ public class NativeDataSourceTest {
     // todo
   }
 
+  @Test
   public void testScanner() {
-    // todo
+    String path = sampleParquet();
+    RootAllocator allocator = new RootAllocator(Long.MAX_VALUE);
+    NativeDataSourceDiscovery discovery = new FileSetDataSourceDiscovery(
+        allocator, FileFormat.PARQUET, FileSystem.LOCAL,
+        path);
+    NativeDataSource dataSource = discovery.finish();
+    Schema schema = discovery.inspect();
+    Dataset<NativeDataSource> dataset = new Dataset<>(Collections.singletonList(dataSource), schema);
+    NativeScanner scanner = new NativeScanner(
+        dataset, new ScanOptions(new String[]{"id", "title"}, Filter.EMPTY, 100), allocator);
+    List<? extends ScanTask> scanTasks = collect(scanner.scan());
+    Assert.assertEquals(1, scanTasks.size());
+
+    ScanTask scanTask = scanTasks.get(0);
+    List<? extends VectorSchemaRoot> data = collect(scanTask.scan());
+    Assert.assertNotNull(data);
+    Assert.assertEquals(10, data.size());
+    VectorSchemaRoot vsr = data.get(0);
+    Assert.assertEquals(100, vsr.getRowCount());
+
+    // check if projector is applied
+    Assert.assertEquals("Schema<id: Int(32, true), title: Utf8>",
+        vsr.getSchema().toString());
   }
 
   public void testFilter() {

@@ -37,9 +37,13 @@ public class NativeDataSource implements DataSource, AutoCloseable {
   @Override
   public Iterable<? extends DataFragment> getFragments(ScanOptions options) {
     return LongStream.of(JniWrapper.get()
-      .getFragments(dataSourceId, options.getColumns(), options.getFilter().toByteArray(), options.getBatchSize()))
-      .mapToObj(id -> new NativeDataFragment(context, id))
+      .getFragments(dataSourceId, options.getBatchSize()))
+      .mapToObj(id -> new NativeDataFragment(context, id, options.getColumns(), options.getFilter()))
       .collect(Collectors.toList());
+  }
+
+  public long getDataSourceId() {
+    return dataSourceId;
   }
 
   @Override

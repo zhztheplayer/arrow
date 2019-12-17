@@ -15,49 +15,49 @@
  * limitations under the License.
  */
 
-package org.apache.arrow.dataset.jni;
+package org.apache.arrow.util;
 
-import org.apache.arrow.dataset.datasource.DataSource;
-import org.apache.arrow.dataset.datasource.DataSourceDiscovery;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.channels.Channels;
+
 import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.util.SchemaUtils;
 import org.apache.arrow.vector.ipc.ReadChannel;
+import org.apache.arrow.vector.ipc.WriteChannel;
 import org.apache.arrow.vector.ipc.message.MessageChannelReader;
 import org.apache.arrow.vector.ipc.message.MessageResult;
 import org.apache.arrow.vector.ipc.message.MessageSerializer;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.arrow.vector.util.ByteArrayReadableSeekableByteChannel;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
+public class SchemaUtils {
+  private static final SchemaUtils INSTANCE = new SchemaUtils();
 
-public class NativeDataSourceDiscovery implements DataSourceDiscovery, AutoCloseable {
-  private final long dataSourceDiscoveryId;
-  private final BufferAllocator allocator;
-
-  public NativeDataSourceDiscovery(BufferAllocator allocator, long dataSourceDiscoveryId) {
-    this.allocator = allocator;
-    this.dataSourceDiscoveryId = dataSourceDiscoveryId;
+  public static SchemaUtils get() {
+    return INSTANCE;
   }
 
-  @Override
-  public Schema inspect() {
-    byte[] buffer = JniWrapper.get().inspectSchema(dataSourceDiscoveryId);
-    try {
-      return SchemaUtils.get().deserialize(buffer, allocator);
-    } catch (IOException e) {
-      throw new RuntimeException(e);
+  private SchemaUtils() {
+
+  }
+
+  public Schema deserialize(byte[] bytes, BufferAllocator allocator) throws IOException {
+    try (MessageChannelReader schemaReader =
+             new MessageChannelReader(
+                 new ReadChannel(
+                     new ByteArrayReadableSeekableByteChannel(bytes)), allocator)) {
+
+      MessageResult result = schemaReader.readNext();
+      if (result == null) {
+        throw new IOException("Unexpected end of input. Missing schema.");
+      }
+      return MessageSerializer.deserializeSchema(result.getMessage());
     }
   }
 
-  @Override
-  public NativeDataSource finish() {
-    return new NativeDataSource(new NativeContext(inspect(), allocator),
-      JniWrapper.get().createDataSource(dataSourceDiscoveryId));
-  }
-
-  @Override
-  public void close() throws Exception {
-    JniWrapper.get().closeDataSourceDiscovery(dataSourceDiscoveryId);
+  public byte[] serialize(Schema schema) throws IOException {
+    final ByteArrayOutputStream out = new ByteArrayOutputStream();
+    MessageSerializer.serialize(new WriteChannel(Channels.newChannel(out)), schema);
+    return out.toByteArray();
   }
 }

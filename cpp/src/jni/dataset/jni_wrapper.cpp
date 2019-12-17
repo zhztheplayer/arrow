@@ -21,6 +21,7 @@
 #include <arrow/ipc/api.h>
 #include <arrow/util/iterator.h>
 #include <arrow/filesystem/hdfs.h>
+#include <arrow/io/api.h>
 #include "jni/concurrent_map.h"
 
 #include "org_apache_arrow_dataset_file_JniWrapper.h"
@@ -46,6 +47,7 @@ static ConcurrentMap<arrow::dataset::DataSourceDiscoveryPtr > data_source_discov
 static ConcurrentMap<arrow::dataset::DataSourcePtr> data_source_holder_;
 static ConcurrentMap<arrow::dataset::DataFragmentPtr > data_fragment_holder_;
 static ConcurrentMap<arrow::dataset::ScanTaskPtr> scan_task_holder_;
+static ConcurrentMap<std::shared_ptr<arrow::dataset::Scanner>> scanner_holder_;
 static ConcurrentMap<std::shared_ptr<arrow::RecordBatchIterator>> iterator_holder_;
 static ConcurrentMap<std::shared_ptr<arrow::Buffer>> buffer_holder_;
 
@@ -114,6 +116,7 @@ void JNI_OnUnload(JavaVM* vm, void* reserved) {
   data_source_holder_.Clear();
   data_fragment_holder_.Clear();
   scan_task_holder_.Clear();
+  scanner_holder_.Clear();
   iterator_holder_.Clear();
 }
 
@@ -190,6 +193,45 @@ std::vector<T> collect(arrow::Iterator<T> itr) {
   return vector;
 }
 
+// FIXME: COPIED FROM intel/master on which this branch is not rebased yet
+// FIXME: https://github.com/Intel-bigdata/arrow/blob/02502a4eb59834c2471dd629e77dbeed19559f68/cpp/src/jni/jni_common.h#L239-L254
+jbyteArray ToSchemaByteArray(JNIEnv* env, std::shared_ptr<arrow::Schema> schema) {
+  arrow::Status status;
+  std::shared_ptr<arrow::Buffer> buffer;
+  status = arrow::ipc::SerializeSchema(*schema.get(), nullptr,
+                                       arrow::default_memory_pool(), &buffer);
+  if (!status.ok()) {
+    std::string error_message =
+        "Unable to convert schema to byte array, err is " + status.message();
+    env->ThrowNew(runtime_exception_class, error_message.c_str());
+  }
+
+  jbyteArray out = env->NewByteArray(buffer->size());
+  auto src = reinterpret_cast<const jbyte*>(buffer->data());
+  env->SetByteArrayRegion(out, 0, buffer->size(), src);
+  return out;
+}
+
+// FIXME: COPIED FROM intel/master on which this branch is not rebased yet
+// FIXME: https://github.com/Intel-bigdata/arrow/blob/02502a4eb59834c2471dd629e77dbeed19559f68/cpp/src/jni/jni_common.h#L256-L272
+arrow::Status FromSchemaByteArray(JNIEnv* env, jbyteArray schemaBytes,
+                                  std::shared_ptr<arrow::Schema>* schema) {
+  arrow::Status status;
+  arrow::ipc::DictionaryMemo in_memo;
+
+  int schemaBytes_len = env->GetArrayLength(schemaBytes);
+  jbyte* schemaBytes_data = env->GetByteArrayElements(schemaBytes, 0);
+
+  auto serialized_schema =
+      std::make_shared<arrow::Buffer>((uint8_t*)schemaBytes_data, schemaBytes_len);
+  arrow::io::BufferReader buf_reader(serialized_schema);
+  status = arrow::ipc::ReadSchema(&buf_reader, &in_memo, schema);
+
+  env->ReleaseByteArrayElements(schemaBytes, schemaBytes_data, JNI_ABORT);
+
+  return status;
+}
+
 /*
  * Class:     org_apache_arrow_dataset_jni_JniWrapper
  * Method:    closeDataSourceDiscovery
@@ -210,20 +252,7 @@ JNIEXPORT jbyteArray JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_inspec
   std::shared_ptr<arrow::dataset::DataSourceDiscovery> d
       = data_source_discovery_holder_.Lookup(data_source_discovery_id);
   std::shared_ptr<arrow::Schema> schema = d->Inspect().ValueOrDie();// fixme ValueOrDie
-
-  std::shared_ptr<arrow::Buffer> out;
-
-  auto status =
-      arrow::ipc::SerializeSchema(*schema, nullptr, arrow::default_memory_pool(), &out);
-  if (!status.ok()) {
-    std::string error_message = "unable to serialize schema";
-    env->ThrowNew(runtime_exception_class, error_message.c_str());
-  }
-
-  jbyteArray ret = env->NewByteArray(out->size());
-  auto src = reinterpret_cast<const jbyte *>(out->data());
-  env->SetByteArrayRegion(ret, 0, out->size(), src);
-  return ret;
+  return ToSchemaByteArray(env, schema);
 }
 
 /*
@@ -255,12 +284,11 @@ JNIEXPORT void JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_closeDataSou
  * Signature: (J[Ljava/lang/String;[B)[J
  */
 JNIEXPORT jlongArray JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_getFragments
-    (JNIEnv* env, jobject, jlong data_source_id, jobjectArray columns, jbyteArray filter, jlong batch_size) {
+    (JNIEnv* env, jobject, jlong data_source_id, jlong batch_size) {
   // todo consider filter buffer (the last param) which is currently ignored
   arrow::dataset::DataSourcePtr data_source = data_source_holder_.Lookup(data_source_id);
   arrow::dataset::ScanOptionsPtr scan_options = arrow::dataset::ScanOptions::Defaults();
   scan_options->batch_size = batch_size;
-  std::vector<std::string> column_names = ToStringVector(env, columns);
   arrow::dataset::DataFragmentIterator itr = data_source->GetFragments(scan_options); // todo consider column names projector (and output schema should be kept up with)
   std::vector<arrow::dataset::DataFragmentPtr> vector = collect(std::move(itr));
   jlongArray ret = env->NewLongArray(vector.size());
@@ -407,4 +435,78 @@ JNIEXPORT jlong JNICALL Java_org_apache_arrow_dataset_file_JniWrapper_makeFileSe
   std::shared_ptr<arrow::dataset::DataSourceDiscovery>
       d = arrow::dataset::SingleFileDataSourceDiscovery::Make(out_path, fs, file_format).ValueOrDie();// fixme ValueOrDie
   return data_source_discovery_holder_.Insert(d);
+}
+
+/*
+ * Class:     org_apache_arrow_dataset_jni_JniWrapper
+ * Method:    createScanner
+ * Signature: ([J[B[Ljava/lang/String;[BJ)J
+ */
+JNIEXPORT jlong JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_createScanner
+    (JNIEnv* env, jobject, jlongArray data_source_ids, jbyteArray schema_bytes, jobjectArray columns, jbyteArray filter, jlong batch_size) {
+  std::shared_ptr<arrow::dataset::ScanContext> context = std::make_shared<arrow::dataset::ScanContext>();
+  jsize size = env->GetArrayLength(data_source_ids);
+  jboolean copied;
+  jlong *ids_long = env->GetLongArrayElements(data_source_ids, &copied);
+
+  std::vector<arrow::dataset::DataSourcePtr> data_source_vector;
+  for (int i = 0; i < size; i++) {
+    jlong id = ids_long[i];
+    data_source_vector.push_back(data_source_holder_.Lookup(id));
+  }
+  if (copied) {
+    env->ReleaseLongArrayElements(data_source_ids, ids_long, JNI_ABORT);
+  }
+  std::shared_ptr<arrow::Schema> schema;
+  FromSchemaByteArray(env, schema_bytes, &schema).ok(); // fixme ok()
+  arrow::dataset::DatasetPtr dataset = arrow::dataset::Dataset::Make(data_source_vector, schema).ValueOrDie(); // fixme ValueOrDie()
+  std::shared_ptr<arrow::dataset::ScannerBuilder> scanner_builder = dataset->NewScan().ValueOrDie(); // fixme ValueOrDie()
+
+  std::vector<std::string> column_vector = ToStringVector(env, columns);
+  scanner_builder->Project(column_vector).ok(); // fixme ok()
+  scanner_builder->BatchSize(batch_size).ok(); // fixme ok()
+  // todo initialize filters
+  auto scanner = scanner_builder->Finish().ValueOrDie();
+  return scanner_holder_.Insert(scanner);
+}
+
+/*
+ * Class:     org_apache_arrow_dataset_jni_JniWrapper
+ * Method:    closeScanner
+ * Signature: (J)V
+ */
+JNIEXPORT void JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_closeScanner
+    (JNIEnv *, jobject, jlong scanner_id) {
+  scanner_holder_.Erase(scanner_id);
+}
+
+/*
+ * Class:     org_apache_arrow_dataset_jni_JniWrapper
+ * Method:    getSchemaFromScanner
+ * Signature: (J)[B
+ */
+JNIEXPORT jbyteArray JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_getSchemaFromScanner
+    (JNIEnv* env, jobject, jlong scanner_id) {
+  std::shared_ptr<arrow::Schema> schema = scanner_holder_.Lookup(scanner_id)->GetSchema().ValueOrDie(); // fixme ValueOrDie()
+  return ToSchemaByteArray(env, schema);
+}
+
+/*
+ * Class:     org_apache_arrow_dataset_jni_JniWrapper
+ * Method:    getScanTasksFromScanner
+ * Signature: (J)[J
+ */
+JNIEXPORT jlongArray JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_getScanTasksFromScanner
+    (JNIEnv* env, jobject, jlong scanner_id) {
+  auto scanner = scanner_holder_.Lookup(scanner_id);
+  arrow::dataset::ScanTaskIterator itr = scanner->Scan().ValueOrDie(); // fixme ValueOrDie
+  std::vector<arrow::dataset::ScanTaskPtr> vector = collect(std::move(itr));
+  // Duplicated code with :323-:330
+  jlongArray ret = env->NewLongArray(vector.size());
+  for (unsigned long i = 0; i < vector.size(); i++) {
+    arrow::dataset::ScanTaskPtr scan_task = vector.at(i);
+    jlong id[] = {scan_task_holder_.Insert(scan_task)};
+    env->SetLongArrayRegion(ret, i, 1, id);
+  }
+  return ret;
 }
