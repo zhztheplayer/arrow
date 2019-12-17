@@ -122,13 +122,16 @@ bool FileSystemDataSource::PartitionMatches(const fs::FileStats& stats,
   return true;
 }
 
-FileSetDataSource::FileSetDataSource(FileSourceVector files, fs::FileSystemPtr fs, FileFormatPtr format)
-    : files_(std::move(files)),
+SingleFileDataSource::SingleFileDataSource(FileSourcePtr file,
+                                           fs::FileSystemPtr fs,
+                                           FileFormatPtr format)
+    : file_(std::move(file)),
       format_(std::move(format)),
       fs_(std::move(fs)){}
 
-DataFragmentIterator FileSetDataSource::GetFragmentsImpl(ScanOptionsPtr options) {
-  auto file_srcs_it = MakeVectorIterator(std::move(files_));
+DataFragmentIterator SingleFileDataSource::GetFragmentsImpl(ScanOptionsPtr options) {
+  std::vector<FileSourcePtr> files({file_});
+  auto file_srcs_it = MakeVectorIterator(std::move(files));
   auto file_src_to_fragment = [options, this](const FileSourcePtr& source, std::shared_ptr<DataFragment>* out) {
     ARROW_ASSIGN_OR_RAISE(*out, format_->MakeFragment(*source, options));
     return Status::OK();
@@ -136,22 +139,18 @@ DataFragmentIterator FileSetDataSource::GetFragmentsImpl(ScanOptionsPtr options)
   return MakeMaybeMapIterator(file_src_to_fragment, std::move(file_srcs_it));
 }
 
-Result<DataSourcePtr> FileSetDataSource::Make(std::vector<std::string> paths,
+Result<DataSourcePtr> SingleFileDataSource::Make(std::string path,
                                               fs::FileSystemPtr fs,
                                               FileFormatPtr format) {
-  FileSourceVector file_srcs;
-  for (const auto& path : paths) {
-    std::shared_ptr<FileSource> file_src = std::make_shared<FileSource>(path, fs.get());
-    file_srcs.push_back(std::move(file_src));
-  }
+  std::shared_ptr<FileSource> file_src = std::make_shared<FileSource>(path, fs.get());
   return DataSourcePtr(
-      new FileSetDataSource(std::move(file_srcs), std::move(fs), std::move(format)));
+      new SingleFileDataSource(std::move(file_src), fs, std::move(format)));
 }
 
-Result<DataSourcePtr> FileSetDataSource::Make(FileSourceVector files,
-                                              fs::FileSystemPtr fs,
-                                              FileFormatPtr format) {
-  return DataSourcePtr(new FileSetDataSource(std::move(files), std::move(fs), std::move(format)));
+Result<DataSourcePtr> SingleFileDataSource::Make(FileSourcePtr file,
+                                                 fs::FileSystemPtr fs,
+                                                 FileFormatPtr format) {
+  return DataSourcePtr(new SingleFileDataSource(std::move(file), std::move(fs), std::move(format)));
 }
 
 }  // namespace dataset

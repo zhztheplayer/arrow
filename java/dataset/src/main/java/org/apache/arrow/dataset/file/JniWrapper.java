@@ -31,6 +31,6 @@ public class JniWrapper {
     JniLoader.get().ensureLoaded();
   }
 
-  public native long makeFileSetDataSourceDiscovery(String[] paths, int fileFormat, int fileSystem);
+  public native long makeFileSetDataSourceDiscovery(String path, int fileFormat, int fileSystem);
 
 }

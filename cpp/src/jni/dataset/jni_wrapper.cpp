@@ -137,27 +137,15 @@ std::shared_ptr<arrow::dataset::FileFormat> GetFileFormat(JNIEnv *env, jint id) 
   }
 }
 
-arrow::fs::FileSystemPtr GetFileSystem(JNIEnv *env, jint id, std::vector<std::string> paths,
-                                       std::vector<std::string> *out_paths) {
+arrow::fs::FileSystemPtr GetFileSystem(JNIEnv *env, jint id, std::string path,
+                                       std::string* out_path) {
   switch (id) {
     case 0:
-      *out_paths = paths;
+      *out_path = path;
       return std::make_shared<arrow::fs::LocalFileSystem>();
     case 1: {
-      std::string p0 = paths.at(0); // fixme temporarily use the leading one of paths; how to check if their filesystems are equal in cpp?
       arrow::fs::FileSystemPtr ret;
-      arrow::fs::FileSystemFromUri(p0, &ret).ok();
-      *out_paths = std::vector<std::string>();
-      for (const auto &path :paths) {
-        arrow::fs::FileSystemPtr fs;
-        std::string out_path;
-        arrow::Status status = arrow::fs::FileSystemFromUri(path, &fs, &out_path);
-        if (!status.ok()) {
-          std::string error_message = status.message();
-          env->ThrowNew(runtime_exception_class, error_message.c_str());
-        }
-        out_paths->push_back(std::move(out_path));
-      }
+      arrow::fs::FileSystemFromUri(path, &ret, out_path).ok();
       return ret;
     }
     default:std::string error_message = "illegal filesystem id: " + std::to_string(id);
@@ -412,12 +400,11 @@ JNIEXPORT void JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_releaseBuffe
  * Signature: ([Ljava/lang/String;II)J
  */
 JNIEXPORT jlong JNICALL Java_org_apache_arrow_dataset_file_JniWrapper_makeFileSetDataSourceDiscovery
-    (JNIEnv* env, jobject, jobjectArray paths, jint file_format_id, jint file_system_id) {
+    (JNIEnv* env, jobject, jstring path, jint file_format_id, jint file_system_id) {
   std::shared_ptr<arrow::dataset::FileFormat> file_format = GetFileFormat(env, file_format_id);
-  std::vector<std::string> path_vector = ToStringVector(env, paths);
-  std::vector<std::string> out_paths;
-  arrow::fs::FileSystemPtr fs = GetFileSystem(env, file_system_id, path_vector, &out_paths);
+  std::string out_path;
+  arrow::fs::FileSystemPtr fs = GetFileSystem(env, file_system_id, JStringToCString(env, path), &out_path);
   std::shared_ptr<arrow::dataset::DataSourceDiscovery>
-      d = arrow::dataset::FileSetDataSourceDiscovery::Make(out_paths, fs, file_format).ValueOrDie();// fixme ValueOrDie
+      d = arrow::dataset::SingleFileDataSourceDiscovery::Make(out_path, fs, file_format).ValueOrDie();// fixme ValueOrDie
   return data_source_discovery_holder_.Insert(d);
 }

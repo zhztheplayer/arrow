@@ -205,15 +205,17 @@ class ARROW_DS_EXPORT FileSystemDataSource : public DataSource {
   FileFormatPtr format_;
 };
 
-class ARROW_DS_EXPORT FileSetDataSource : public DataSource {
+class ARROW_DS_EXPORT SingleFileDataSource : public DataSource {
  public:
-  FileSetDataSource(FileSourceVector files, fs::FileSystemPtr fs, FileFormatPtr format);
+  SingleFileDataSource(FileSourcePtr file,
+                       fs::FileSystemPtr fs,
+                       FileFormatPtr format);
 
-  static Result<DataSourcePtr> Make(FileSourceVector files,
+  static Result<DataSourcePtr> Make(FileSourcePtr file,
                                     fs::FileSystemPtr fs,
                                     FileFormatPtr format);
 
-  static Result<DataSourcePtr> Make(std::vector<std::string> paths,
+  static Result<DataSourcePtr> Make(std::string path,
                                     fs::FileSystemPtr fs,
                                     FileFormatPtr format);
 
@@ -225,7 +227,7 @@ class ARROW_DS_EXPORT FileSetDataSource : public DataSource {
   }
 
  private:
-  FileSourceVector files_;
+  FileSourcePtr file_;
   FileFormatPtr format_;
   fs::FileSystemPtr fs_;
 };

@@ -91,11 +91,8 @@ TEST_F(TestFileSystemBasedDataSource, Basic) {
 }
 
 TEST_F(TestFileSystemBasedDataSource, FileSetDataSource) {
-  MakeFileSetSource({});
-  AssertFragmentsAreFromPath(source_->GetFragments(options_), {});
-
-  MakeFileSetSource({"a", "b", "c", "A/a", "B/b", "C/c"});
-  AssertFragmentsAreFromPath(source_->GetFragments(options_), {"a", "b", "c", "A/a", "B/b", "C/c"});
+  MakeSingleFileSource("A/a");
+  AssertFragmentsAreFromPath(source_->GetFragments(options_), {"A/a"});
 }
 
 TEST_F(TestFileSystemBasedDataSource, RootPartitionPruning) {

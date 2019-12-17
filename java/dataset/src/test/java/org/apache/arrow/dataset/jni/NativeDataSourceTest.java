@@ -82,7 +82,7 @@ public class NativeDataSourceTest {
     String path = sampleParquet();
     DataSourceDiscovery discovery = new FileSetDataSourceDiscovery(
         new RootAllocator(Long.MAX_VALUE), FileFormat.PARQUET, FileSystem.LOCAL,
-        Collections.singletonList(path));
+        path);
     testDiscoveryEndToEnd(discovery);
   }
 
@@ -91,7 +91,7 @@ public class NativeDataSourceTest {
     String path = "file:" + sampleParquet();
     DataSourceDiscovery discovery = new FileSetDataSourceDiscovery(
         new RootAllocator(Long.MAX_VALUE), FileFormat.PARQUET, FileSystem.HDFS,
-        Collections.singletonList(path));
+        path);
     testDiscoveryEndToEnd(discovery);
   }
 

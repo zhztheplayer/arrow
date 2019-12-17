@@ -138,33 +138,32 @@ Result<DataSourcePtr> FileSystemDataSourceDiscovery::Finish() {
                                     format_);
 }
 
-FileSetDataSourceDiscovery::FileSetDataSourceDiscovery(FileSourceVector files, FileFormatPtr format, fs::FileSystemPtr fs)
-    : files_(std::move(files)), format_(std::move(format)), fs_(std::move(fs)) {}
+SingleFileDataSourceDiscovery::SingleFileDataSourceDiscovery(FileSourcePtr file, fs::FileSystemPtr fs, FileFormatPtr format)
+    : file_(std::move(file)), format_(std::move(format)), fs_(std::move(fs)) {}
 
-Result<DataSourceDiscoveryPtr> FileSetDataSourceDiscovery::Make(FileSourceVector files,
-                                                                fs::FileSystemPtr fs,
-                                                                FileFormatPtr format) {
-  return DataSourceDiscoveryPtr(new FileSetDataSourceDiscovery(std::move(files), std::move(format), fs));
+Result<DataSourceDiscoveryPtr> SingleFileDataSourceDiscovery::Make(FileSourcePtr file,
+                                                                   fs::FileSystemPtr fs,
+                                                                   FileFormatPtr format) {
+  return DataSourceDiscoveryPtr(new SingleFileDataSourceDiscovery(std::move(file), std::move(fs),
+      std::move(format)));
 }
 
-Result<DataSourceDiscoveryPtr> FileSetDataSourceDiscovery::Make(std::vector<std::string> paths,
-                                                                fs::FileSystemPtr fs,
-                                                                FileFormatPtr format) {
-  FileSourceVector file_srcs;
-  for (const auto &path : paths) {
-    std::shared_ptr<FileSource> file_src = std::make_shared<FileSource>(path, fs.get());
-    file_srcs.push_back(std::move(file_src));
-  }
-  return DataSourceDiscoveryPtr(new FileSetDataSourceDiscovery(std::move(file_srcs), std::move(format), fs));
+Result<DataSourceDiscoveryPtr> SingleFileDataSourceDiscovery::Make(std::string path,
+                                                                   fs::FileSystemPtr fs,
+                                                                   FileFormatPtr format) {
+
+  std::shared_ptr<FileSource> file_src = std::make_shared<FileSource>(path, fs.get());
+  return DataSourceDiscoveryPtr(new SingleFileDataSourceDiscovery(std::move(file_src), std::move(fs),
+      std::move(format)));
 }
 
-Result<std::shared_ptr<Schema>> FileSetDataSourceDiscovery::Inspect() {
-  ARROW_ASSIGN_OR_RAISE(std::shared_ptr<arrow::Schema> schema, format_->Inspect(*files_.at(0)))
+Result<std::shared_ptr<Schema>> SingleFileDataSourceDiscovery::Inspect() {
+  ARROW_ASSIGN_OR_RAISE(std::shared_ptr<arrow::Schema> schema, format_->Inspect(*file_))
   return schema;
 }
 
-Result<DataSourcePtr> FileSetDataSourceDiscovery::Finish() {
-  return FileSetDataSource::Make(files_, fs_, format_);
+Result<DataSourcePtr> SingleFileDataSourceDiscovery::Finish() {
+  return SingleFileDataSource::Make(file_, fs_, format_);
 }
 
 }  // namespace dataset

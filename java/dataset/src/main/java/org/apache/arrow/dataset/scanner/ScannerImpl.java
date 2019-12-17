@@ -35,6 +35,7 @@ public class ScannerImpl implements Scanner {
   @Override
   public Iterable<? extends ScanTask> scan() {
     // flat all scan tasks
+    // todo low priority: to support filter/projector in Java ScannerImpl
     return sources.stream()
       .flatMap(s -> StreamSupport.stream(s.getFragments(options).spliterator(), false))
       .flatMap(f -> StreamSupport.stream(f.scan().spliterator(), false))

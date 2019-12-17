@@ -24,17 +24,13 @@ import java.util.List;
 
 public class FileSetDataSourceDiscovery extends NativeDataSourceDiscovery {
 
-  public FileSetDataSourceDiscovery(BufferAllocator allocator, FileFormat format, FileSystem fs, List<String> paths) {
-    super(allocator, createNative(format, fs, paths));
+  public FileSetDataSourceDiscovery(BufferAllocator allocator, FileFormat format, FileSystem fs, String path) {
+    super(allocator, createNative(format, fs, path));
 
   }
 
-  private static long createNative(FileFormat format, FileSystem fs, List<String> paths) {
-    return JniWrapper.get().makeFileSetDataSourceDiscovery(toPathArray(paths), format.id(), fs.id());
-  }
-
-  private static String[] toPathArray(List<String> paths) {
-    return paths.toArray(new String[0]);
+  private static long createNative(FileFormat format, FileSystem fs, String path) {
+    return JniWrapper.get().makeFileSetDataSourceDiscovery(path, format.id(), fs.id());
   }
 
 }
