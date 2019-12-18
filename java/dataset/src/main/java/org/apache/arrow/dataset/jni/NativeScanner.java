@@ -24,11 +24,12 @@ import java.util.stream.Collectors;
 import org.apache.arrow.dataset.Dataset;
 import org.apache.arrow.dataset.scanner.ScanOptions;
 import org.apache.arrow.dataset.scanner.ScanTask;
+import org.apache.arrow.dataset.scanner.Scanner;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.util.SchemaUtils;
 import org.apache.arrow.vector.types.pojo.Schema;
 
-public class NativeScanner implements AutoCloseable {
+public class NativeScanner implements Scanner {
   private final long nativeInstanceId;
   private final BufferAllocator allocator;
 
@@ -48,6 +49,7 @@ public class NativeScanner implements AutoCloseable {
     }
   }
 
+  @Override
   public Iterable<? extends ScanTask> scan() {
     final byte[] schemaBytes = JniWrapper.get().getSchemaFromScanner(nativeInstanceId);
     try {

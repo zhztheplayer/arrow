@@ -27,7 +27,7 @@ import org.apache.arrow.dataset.Dataset;
 import org.apache.arrow.dataset.datasource.DataSource;
 import org.apache.arrow.dataset.datasource.DataSourceDiscovery;
 import org.apache.arrow.dataset.file.FileFormat;
-import org.apache.arrow.dataset.file.FileSetDataSourceDiscovery;
+import org.apache.arrow.dataset.file.SingleFileDataSourceDiscovery;
 import org.apache.arrow.dataset.file.FileSystem;
 import org.apache.arrow.dataset.filter.Filter;
 import org.apache.arrow.dataset.fragment.DataFragment;
@@ -81,7 +81,7 @@ public class NativeDatasetTest {
   @Test
   public void testLocalFs() {
     String path = sampleParquet();
-    DataSourceDiscovery discovery = new FileSetDataSourceDiscovery(
+    DataSourceDiscovery discovery = new SingleFileDataSourceDiscovery(
         new RootAllocator(Long.MAX_VALUE), FileFormat.PARQUET, FileSystem.LOCAL,
         path);
     testDiscoveryEndToEnd(discovery);
@@ -90,7 +90,7 @@ public class NativeDatasetTest {
   @Test
   public void testHdfsWithFileProtocol() {
     String path = "file:" + sampleParquet();
-    DataSourceDiscovery discovery = new FileSetDataSourceDiscovery(
+    DataSourceDiscovery discovery = new SingleFileDataSourceDiscovery(
         new RootAllocator(Long.MAX_VALUE), FileFormat.PARQUET, FileSystem.HDFS,
         path);
     testDiscoveryEndToEnd(discovery);
@@ -105,7 +105,7 @@ public class NativeDatasetTest {
   public void testScanner() {
     String path = sampleParquet();
     RootAllocator allocator = new RootAllocator(Long.MAX_VALUE);
-    NativeDataSourceDiscovery discovery = new FileSetDataSourceDiscovery(
+    NativeDataSourceDiscovery discovery = new SingleFileDataSourceDiscovery(
         allocator, FileFormat.PARQUET, FileSystem.LOCAL,
         path);
     NativeDataSource dataSource = discovery.finish();

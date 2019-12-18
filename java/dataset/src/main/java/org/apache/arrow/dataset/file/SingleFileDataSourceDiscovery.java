@@ -22,9 +22,9 @@ import org.apache.arrow.memory.BufferAllocator;
 
 import java.util.List;
 
-public class FileSetDataSourceDiscovery extends NativeDataSourceDiscovery {
+public class SingleFileDataSourceDiscovery extends NativeDataSourceDiscovery {
 
-  public FileSetDataSourceDiscovery(BufferAllocator allocator, FileFormat format, FileSystem fs, String path) {
+  public SingleFileDataSourceDiscovery(BufferAllocator allocator, FileFormat format, FileSystem fs, String path) {
     super(allocator, createNative(format, fs, path));
 
   }
