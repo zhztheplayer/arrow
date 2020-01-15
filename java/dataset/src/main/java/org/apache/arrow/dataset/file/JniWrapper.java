@@ -15,17 +15,25 @@
  * limitations under the License.
  */
 
-package org.apache.arrow.dataset.scanner;
+package org.apache.arrow.dataset.file;
 
-import org.apache.arrow.vector.types.pojo.Schema;
+import org.apache.arrow.dataset.jni.JniLoader;
 
 /**
- * A high level interface for scanning data over datasets.
+ * JniWrapper for filesystem based {@link org.apache.arrow.dataset.source.Dataset} implementations.
  */
-public interface Scanner extends AutoCloseable {
+public class JniWrapper {
 
-  Iterable<? extends ScanTask> scan();
+  private static final JniWrapper INSTANCE = new JniWrapper();
+  
+  public static JniWrapper get() {
+    return INSTANCE;
+  }
 
-  Schema schema();
+  private JniWrapper() {
+    JniLoader.get().ensureLoaded();
+  }
+
+  public native long makeSingleFileDatasetFactory(String path, int fileFormat, int fileSystem);
 
 }
