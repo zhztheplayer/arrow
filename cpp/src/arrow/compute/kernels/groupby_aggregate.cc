@@ -229,7 +229,8 @@ class RegularHashKernelImpl : public HashKernelImpl {
       action_.ObserveNotFound(memo_index);
     };
 
-    memo_table_->GetOrInsert(value, on_found, on_not_found);
+    int32_t out_memo_index;
+    memo_table_->GetOrInsert(value, on_found, on_not_found, &out_memo_index);
     return Status::OK();
   }
 
@@ -240,7 +241,9 @@ class RegularHashKernelImpl : public HashKernelImpl {
     auto on_not_found = [this, &s](int32_t memo_index) {
       action_.ObserveNotFound(memo_index, &s);
     };
-    memo_table_->GetOrInsert(value, on_found, on_not_found);
+
+    int32_t out_memo_index;
+    memo_table_->GetOrInsert(value, on_found, on_not_found, &out_memo_index);
     return s;
   }
 
