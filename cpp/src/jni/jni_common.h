@@ -264,7 +264,7 @@ arrow::Status FromSchemaByteArray(JNIEnv* env, jbyteArray schemaBytes,
   auto serialized_schema =
       std::make_shared<arrow::Buffer>((uint8_t*)schemaBytes_data, schemaBytes_len);
   arrow::io::BufferReader buf_reader(serialized_schema);
-  status = arrow::ipc::ReadSchema(&buf_reader, &in_memo, schema);
+  *schema = arrow::ipc::ReadSchema(&buf_reader, &in_memo).ValueOrDie();
 
   env->ReleaseByteArrayElements(schemaBytes, schemaBytes_data, JNI_ABORT);
 

@@ -89,11 +89,7 @@ Java_org_apache_arrow_adapter_parquet_ParquetReaderJniWrapper_nativeOpenParquetR
 
   std::shared_ptr<FileSystem> fs;
   std::string file_name;
-  status = arrow::fs::FileSystemFromUri(cpath, &fs, &file_name);
-  if (!status.ok()) {
-    std::string error_message = "nativeOpenParquetReader: " + status.message();
-    env->ThrowNew(io_exception_class, error_message.c_str());
-  }
+  fs = arrow::fs::FileSystemFromUri(cpath, &file_name).ValueOrDie();
 
   std::shared_ptr<arrow::io::RandomAccessFile> file;
   ARROW_ASSIGN_OR_THROW(file, fs->OpenInputFile(file_name));
@@ -252,19 +248,16 @@ Java_org_apache_arrow_adapter_parquet_ParquetWriterJniWrapper_nativeOpenParquetW
 
   std::shared_ptr<FileSystem> fs;
   std::string file_name;
-  status = arrow::fs::FileSystemFromUri(cpath, &fs, &file_name);
-  if (!status.ok()) {
-    std::string error_message = "nativeOpenParquetWriter: " + status.message();
-    env->ThrowNew(io_exception_class, error_message.c_str());
-  }
+
+  fs = arrow::fs::FileSystemFromUri(cpath, &file_name).ValueOrDie();
 
   // check if directory exists
   auto dir = arrow::fs::internal::GetAbstractPathParent(file_name).first;
   arrow::fs::FileSelector selector;
   selector.base_dir = dir;
   selector.allow_not_found = true;
-  std::vector<arrow::fs::FileStats> stats;
-  ARROW_ASSIGN_OR_THROW(stats, fs->GetFileInfo(selector));
+  std::vector<arrow::fs::FileInfo> stats;
+  stats = fs->GetFileInfo(selector).ValueOrDie();
   if (stats.size() == 0) {
     status = fs->CreateDir(dir);
     if (!status.ok()) {
