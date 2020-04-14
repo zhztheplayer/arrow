@@ -31,6 +31,7 @@
 #include "arrow/util/logging.h"
 
 #include "plasma/client.h"
+#include "plasma/common.h"
 
 constexpr jsize OBJECT_ID_SIZE = sizeof(plasma::ObjectID) / sizeof(jbyte);
 
@@ -210,6 +211,9 @@ JNIEXPORT jobjectArray JNICALL Java_org_apache_arrow_plasma_PlasmaClientJNI_get(
     } else {
       dataBuf = nullptr;
       metadataBuf = nullptr;
+      jclass Exception =
+          env->FindClass("org/apache/arrow/plasma/exceptions/PlasmaGetException");
+      env->ThrowNew(Exception, "Get returns an invalid value!");
     }
 
     env->SetObjectArrayElement(o, 0, dataBuf);

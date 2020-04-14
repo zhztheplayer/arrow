@@ -128,4 +128,6 @@ public interface ObjectStoreLink {
    * List all objects in the PlasmaStore.
    */
   List<byte[]> list();
+
+  int metrics(long[] metrics);
 }
