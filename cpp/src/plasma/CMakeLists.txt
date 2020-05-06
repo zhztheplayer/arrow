@@ -106,8 +106,6 @@ set_target_properties(plasma_static
 target_link_libraries(plasma_static ${BOOST_SYSTEM_LIBRARY} ${PLASMA_STATIC_LINK_LIBS} )
 install(TARGETS plasma_static ${INSTALL_IS_OPTIONAL}
         EXPORT plasma_targets
-
-        
         RUNTIME DESTINATION ${RUNTIME_INSTALL_DIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -263,9 +261,3 @@ add_plasma_test(test/client_tests
                 ${PLASMA_TEST_LIBS}
                 EXTRA_DEPENDENCIES
                 plasma-store-server)
-# remove this test since API changed
-# add_plasma_test(test/external_store_tests
-#                 EXTRA_LINK_LIBS
-#                 ${PLASMA_TEST_LIBS}
-#                 EXTRA_DEPENDENCIES
-#                 plasma-store-server)

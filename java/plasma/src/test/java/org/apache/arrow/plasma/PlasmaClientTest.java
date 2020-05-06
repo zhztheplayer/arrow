@@ -221,33 +221,6 @@ public class PlasmaClientTest {
     assert !pLink.contains(id6);
     System.out.println("Plasma java client delete test success.");
     
-    // remove this test 
-    // // Test calling shutdown while getting the object.
-    // Thread thread = new Thread(() -> {
-    //   try {
-    //     TimeUnit.SECONDS.sleep(1);
-    //     cleanup();
-    //   } catch (InterruptedException e) {
-    //     throw new RuntimeException("Got InterruptedException when sleeping.", e);
-    //   }
-    // });
-    // thread.start();
-
-    // try {
-    //   byte[] idNone = new byte[20];
-    //   Arrays.fill(idNone, (byte)987);
-    //   pLink.get(idNone, timeoutMs, false);
-    //   Assert.fail("Fail to throw PlasmaClientException when get an object " +
-    //               "when object store shutdown.");
-    // } catch (PlasmaClientException e) {
-    //   System.out.println(String.format("Expected PlasmaClientException: %s", e));
-    // }
-
-    // try {
-    //   thread.join();
-    // } catch (Exception e) {
-    //   System.out.println(String.format("Exception caught: %s", e));
-    // }
     System.out.println("All test success.");
 
   }

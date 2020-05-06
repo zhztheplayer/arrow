@@ -732,12 +732,6 @@ void PlasmaStore::SubscribeToUpdates(const std::shared_ptr<ClientConnection>& cl
   // notifications.
   notification_clients_.insert(client);
 
-  // Push notifications to the new subscriber about existing sealed objects.
-  // for (const auto& entry : store_info_.objects) {
-  //   if (entry.second->state == ObjectState::PLASMA_SEALED) {
-  //     client->SendObjectReadyAsync(entry.first, *entry.second);
-  //   }
-  // }
 }
 
 void PlasmaStore::UpdateMetrics(PlasmaMetrics* metrics) {
