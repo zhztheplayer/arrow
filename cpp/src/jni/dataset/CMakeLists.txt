@@ -40,17 +40,18 @@ set(PROTO_OUTPUT_FILES ${PROTO_OUTPUT_FILES} "${PROTO_OUTPUT_DIR}/DTypes.pb.h")
 
 set_source_files_properties(${PROTO_OUTPUT_FILES} PROPERTIES GENERATED TRUE)
 
-get_filename_component(ABS_ARROW_DATASET_PROTO ${CMAKE_SOURCE_DIR}/src/jni/dataset/proto/DTypes.proto
+get_filename_component(ABS_ARROW_DATASET_PROTO
+        ${CMAKE_SOURCE_DIR}/src/jni/dataset/proto/DTypes.proto
         ABSOLUTE)
 
 add_custom_command(OUTPUT ${PROTO_OUTPUT_FILES}
-        COMMAND protobuf::protoc
+        COMMAND ${ARROW_PROTOBUF_PROTOC}
         --proto_path
         ${CMAKE_SOURCE_DIR}/src/jni/dataset/proto
         --cpp_out
         ${PROTO_OUTPUT_DIR}
         ${CMAKE_SOURCE_DIR}/src/jni/dataset/proto/DTypes.proto
-        DEPENDS ${ABS_ARROW_DATASET_PROTO} protobuf::libprotobuf
+        DEPENDS ${ABS_ARROW_DATASET_PROTO} ${ARROW_PROTOBUF_LIBPROTOBUF}
         COMMENT "Running PROTO compiler on DTypes.proto"
         VERBATIM)
 
