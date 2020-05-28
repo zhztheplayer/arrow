@@ -21,6 +21,7 @@
 #include "plasma/eviction_policy.h"
 #include "plasma/external_store.h"
 #include "plasma/numaThreadPool.h"
+#include "tools/PlasmaProperties.h"
 
 #include <libvmemcache.h>
 
@@ -93,13 +94,15 @@ class VmemcacheStore : public ExternalStore {
   Status RegisterEvictionPolicy(EvictionPolicy* eviction_policy) override;
   void Metrics(int64_t* memory_total, int64_t* memory_used) override;
 
+  bool DetectInitialPath(std::vector<plasma::numaNodeInfo>& numaNodeVt,
+                         std::string& path);
+
  private:
   void Evict(std::vector<ObjectID>& ids, std::vector<std::shared_ptr<Buffer>>& datas);
   std::vector<VMEMcache*> caches;
   std::vector<std::shared_ptr<numaThreadPool>> putThreadPools;
   std::vector<std::shared_ptr<numaThreadPool>> getThreadPools;
   int totalNumaNodes = 2;
-  int threadInPools = 12;
   int64_t totalCacheSize = 0;
   EvictionPolicy* evictionPolicy_;
 };

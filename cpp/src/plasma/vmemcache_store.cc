@@ -28,31 +28,75 @@
 
 #include <libvmemcache.h>
 
+#include <sys/statfs.h>
+
+#include <map>
+
+#include "plasma/tools/PlasmaProperties.h"
+
 #define CACHE_MAX_SIZE (1024 * 1024 * 1024L)
 #define CACHE_EXTENT_SIZE 512
 
 namespace plasma {
+bool VmemcacheStore::DetectInitialPath(std::vector<numaNodeInfo>& numaNodeInfos,
+                                       std::string& argStr) {
+  std::string propertyFilePath = "";
+  int index = argStr.find("propertyFilePath");
+  if (index != -1) {
+    const int commaIndex = argStr.find_first_of(",");
+    const int propertyFilePathEndIndex = 16;
+    propertyFilePath = argStr.substr(propertyFilePathEndIndex, commaIndex);
+    argStr = argStr.substr(commaIndex + 1, argStr.length());
+  }
+  PlasmaProperties* plasmaProperties = new PlasmaProperties(argStr, propertyFilePath);
+  numaNodeInfos = plasmaProperties->getNumaNodeInfos();
+  if (numaNodeInfos.size() == 0) return false;
+
+  for (numaNodeInfo info : numaNodeInfos) {
+    struct statfs pathInfo;
+    int retVal = statfs(info.initialPath.c_str(), &pathInfo);
+    if (retVal < 0) {
+      ARROW_LOG(FATAL) << "Directory: " << info.initialPath << " not exist.";
+      return false;
+    }
+    uint64_t blockSize = pathInfo.f_bsize;
+    uint64_t freeSize = pathInfo.f_bfree * blockSize;
+    if (info.requiredSize > freeSize) {
+      ARROW_LOG(WARNING) << "Failed to provide enough size for allocation"
+                         << "Directory: " << info.initialPath
+                         << "will use max free_size * " << DEFALUT_CONFIG_MULTIPLIER
+                         << " " << freeSize << "B";
+      info.requiredSize = freeSize * DEFALUT_CONFIG_MULTIPLIER;
+    }
+  }
+  return true;
+}
 
 // Connect here is like something initial
 Status VmemcacheStore::Connect(const std::string& endpoint) {
-  auto size_start = endpoint.find("size:") + 5;
-  auto size_end = endpoint.size();
-  std::string sizeStr = endpoint.substr(size_start, size_end);
-  unsigned long long size = std::stoull(sizeStr);
-  if (size == 0) size = CACHE_MAX_SIZE;
-  totalCacheSize = size * totalNumaNodes;
-  ARROW_LOG(DEBUG) << "vmemcache size is " << size;
+  const int vmemcacheStrEndIndex = 12;
+  std::string argStr = endpoint.substr(vmemcacheStrEndIndex, endpoint.length());
+  std::vector<numaNodeInfo> numaNodeInfos;
+  if (!DetectInitialPath(numaNodeInfos, argStr)) {
+    return Status::UnknownError("Initial vmemcache failed!");
+  }
+  totalNumaNodes = numaNodeInfos.size();
   for (int i = 0; i < totalNumaNodes; i++) {
     // initial vmemcache on numa node i
+    numaNodeInfo nninfo = numaNodeInfos[i];
+    totalCacheSize += nninfo.requiredSize;
+
     VMEMcache* cache = vmemcache_new();
     if (!cache) {
       ARROW_LOG(FATAL) << "Initial vmemcache failed!";
       return Status::UnknownError("Initial vmemcache failed!");
     }
-    // TODO: how to find path and bind numa?
-    std::string s = "/mnt/pmem" + std::to_string(i);
-    ARROW_LOG(DEBUG) << "initial vmemcache on " << s << ", size" << size
-                     << ", extent size" << CACHE_EXTENT_SIZE;
+    std::string path = nninfo.initialPath;
+    u_int64_t size = nninfo.requiredSize;
+
+    ARROW_LOG(DEBUG) << "initial vmemcache on " << path << ", size" << size
+                     << ", extent size" << CACHE_EXTENT_SIZE
+                     << ", numa mode id: " << nninfo.numaNodeId;
 
     if (vmemcache_set_size(cache, size)) {
       ARROW_LOG(DEBUG) << "vmemcache_set_size error:" << vmemcache_errormsg();
@@ -64,7 +108,7 @@ Status VmemcacheStore::Connect(const std::string& endpoint) {
       ARROW_LOG(FATAL) << "vmemcache_set_extent_size failed!";
     }
 
-    if (vmemcache_add(cache, s.c_str())) {
+    if (vmemcache_add(cache, path.c_str())) {
       ARROW_LOG(FATAL) << "Initial vmemcache failed!" << vmemcache_errormsg();
     }
 
@@ -72,20 +116,20 @@ Status VmemcacheStore::Connect(const std::string& endpoint) {
 
     std::vector<int> cpus_in_node;
     numaThreadPool::getNumaNodeCpu(i, cpus_in_node);
-    std::vector<int> cpus_for_put(threadInPools);
-    for (int j = 0; j < threadInPools; j++) {
+    std::vector<int> cpus_for_put(nninfo.writePoolSize);
+    for (uint32_t j = 0; j < nninfo.writePoolSize; j++) {
       cpus_for_put[j] = cpus_in_node[j % cpus_in_node.size()];
     }
     std::shared_ptr<numaThreadPool> poolPut(
-        new numaThreadPool(i, threadInPools, cpus_for_put));
+        new numaThreadPool(i, nninfo.writePoolSize, cpus_for_put));
     putThreadPools.push_back(poolPut);
 
-    std::vector<int> cpus_for_get(threadInPools);
-    for (int j = 0; j < threadInPools; j++) {
-      cpus_for_get[j] = cpus_in_node[(j + threadInPools) % cpus_in_node.size()];
+    std::vector<int> cpus_for_get(nninfo.readPoolSize);
+    for (uint32_t j = 0; j < nninfo.readPoolSize; j++) {
+      cpus_for_get[j] = cpus_in_node[(j + nninfo.readPoolSize) % cpus_in_node.size()];
     }
     std::shared_ptr<numaThreadPool> poolGet(
-        new numaThreadPool(i, threadInPools, cpus_for_get));
+        new numaThreadPool(i, nninfo.readPoolSize, cpus_for_get));
     getThreadPools.push_back(poolGet);
 
     ARROW_LOG(DEBUG) << "initial vmemcache success!";
@@ -214,7 +258,6 @@ Status VmemcacheStore::Put(const std::vector<ObjectID>& ids,
       }
     }));
   }
-
   for (int i = 0; i < (int)results.size(); i++) {
     if (results[i].get() != 0) ARROW_LOG(WARNING) << "Put " << i << " failed";
   }
