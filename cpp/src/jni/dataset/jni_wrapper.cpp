@@ -465,7 +465,7 @@ JNIEXPORT jlongArray JNICALL
 Java_org_apache_arrow_dataset_jni_JniWrapper_getScanTasksFromScanner(JNIEnv* env, jobject,
                                                                      jlong scanner_id) {
   std::shared_ptr<arrow::dataset::Scanner> scanner = scanner_holder_.Lookup(scanner_id);
-  JNI_ASSIGN_OR_THROW(arrow::dataset::ScanTaskIterator itr, scanner->Scan())
+  JNI_ASSIGN_OR_THROW(arrow::dataset::ScanTaskIterator itr, scanner->ScanWithWeakFilter())
   std::vector<std::shared_ptr<arrow::dataset::ScanTask>> vector =
       collect(env, std::move(itr));
   jlongArray ret = env->NewLongArray(vector.size());
