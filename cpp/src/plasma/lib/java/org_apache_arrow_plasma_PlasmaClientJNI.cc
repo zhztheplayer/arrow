@@ -31,6 +31,7 @@
 #include "arrow/util/logging.h"
 
 #include "plasma/client.h"
+#include "plasma/common.h"
 
 constexpr jsize OBJECT_ID_SIZE = sizeof(plasma::ObjectID) / sizeof(jbyte);
 
@@ -210,6 +211,9 @@ JNIEXPORT jobjectArray JNICALL Java_org_apache_arrow_plasma_PlasmaClientJNI_get(
     } else {
       dataBuf = nullptr;
       metadataBuf = nullptr;
+      jclass Exception =
+          env->FindClass("org/apache/arrow/plasma/exceptions/PlasmaGetException");
+      env->ThrowNew(Exception, "Get returns an invalid value!");
     }
 
     env->SetObjectArrayElement(o, 0, dataBuf);
@@ -260,4 +264,28 @@ Java_org_apache_arrow_plasma_PlasmaClientJNI_list(JNIEnv* env, jclass cls, jlong
   }
 
   return ret;
+}
+
+JNIEXPORT jint JNICALL Java_org_apache_arrow_plasma_PlasmaClientJNI_metrics(
+    JNIEnv* env, jclass cls, jlong conn, jlongArray metricsArray) {
+  plasma::PlasmaClient* client = reinterpret_cast<plasma::PlasmaClient*>(conn);
+  plasma::PlasmaMetrics metrics_;
+  client->Metrics(&metrics_);
+  int64_t* metrics;
+  if (metricsArray != NULL) {
+    metrics = (int64_t*)env->GetPrimitiveArrayCritical(metricsArray, 0);
+  }
+  if (metrics == NULL) {
+    return -1;
+  }
+  metrics[0] = metrics_.share_mem_total;
+  metrics[1] = metrics_.share_mem_used;
+  metrics[2] = metrics_.external_total;
+  metrics[3] = metrics_.external_used;
+
+  if (metricsArray != NULL) {
+    env->ReleasePrimitiveArrayCritical(metricsArray, (void*)metrics, 0);
+  }
+
+  return 0;
 }

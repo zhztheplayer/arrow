@@ -41,6 +41,17 @@ if [ "${ARROW_USE_CCACHE}" == "ON" ]; then
     ccache -s
 fi
 
+# TO PASS CI, INSTALL libvmemcache
+if [[ "$OSTYPE" == "linux-gnu" ]]; then
+  git clone https://github.com/pmem/vmemcache.git /tmp/vmemcache
+  pushd /tmp/vmemcache
+    mkdir build && cd build
+    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/
+    make --ignore -j$(nproc)
+    make install --ignore -j$(nproc)
+  popd
+fi
+
 mkdir -p ${build_dir}
 pushd ${build_dir}
 

@@ -52,9 +52,7 @@ RUN apt-get update -y -q && \
         gdb \
         git \
         libbenchmark-dev \
-        libboost-filesystem-dev \
-        libboost-regex-dev \
-        libboost-system-dev \
+        libnuma-dev \
         libbrotli-dev \
         libbz2-dev \
         libgflags-dev \
@@ -103,6 +101,7 @@ ENV ARROW_BUILD_TESTS=ON \
     ARROW_WITH_SNAPPY=ON \
     ARROW_WITH_ZLIB=ON \
     ARROW_WITH_ZSTD=ON \
+    BOOST_SOURCE=BUNDLED \
     GTest_SOURCE=BUNDLED \
     ORC_SOURCE=BUNDLED \
     PARQUET_BUILD_EXECUTABLES=ON \

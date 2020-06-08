@@ -22,6 +22,7 @@ add_custom_target(plasma-tests)
 add_dependencies(plasma-all plasma plasma-tests plasma-benchmarks)
 
 # For the moment, Plasma is versioned like Arrow
+project(plasma VERSION "${ARROW_BASE_VERSION}")
 set(PLASMA_VERSION "${ARROW_VERSION}")
 
 find_package(Threads)
@@ -34,23 +35,31 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-conversion")
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
 
+# Set compiling options for asio headers.
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-conversion -Wno-documentation")
+
+set(PLASMA_IO_SRCS
+    fling.cc
+    io/basic_connection.cc
+    io/connection.cc
+    protocol.cc)
+
 set(PLASMA_SRCS
     client.cc
     common.cc
-    fling.cc
-    io.cc
     malloc.cc
     plasma.cc
-    protocol.cc)
+    protocol.cc
+    tools/PlasmaProperties.cpp
+    ${PLASMA_IO_SRCS})
 
 set(PLASMA_STORE_SRCS
     dlmalloc.cc
-    events.cc
     eviction_policy.cc
     quota_aware_policy.cc
     plasma_allocator.cc
-    store.cc
-    thirdparty/ae/ae.c)
+    ${PLASMA_IO_SRCS}
+    store.cc)
 
 set(PLASMA_LINK_LIBS arrow_shared)
 set(PLASMA_STATIC_LINK_LIBS arrow_static)
@@ -66,26 +75,43 @@ if(NOT APPLE AND NOT MSVC)
   # from the client application. The OS X linker does not support the
   # version-script option.
   set(PLASMA_SHARED_LINK_FLAGS
-      "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/symbols.map")
+      "-Wl,--no-undefined,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/symbols.map")
 endif()
 
-add_arrow_lib(plasma
-              CMAKE_PACKAGE_NAME
-              Plasma
-              PKG_CONFIG_NAME
-              plasma
-              SOURCES
-              ${PLASMA_SRCS}
-              OUTPUTS
-              PLASMA_LIBRARIES
-              SHARED_LINK_FLAGS
-              ${PLASMA_SHARED_LINK_FLAGS}
-              SHARED_LINK_LIBS
-              ${PLASMA_LINK_LIBS}
-              STATIC_LINK_LIBS
-              ${PLASMA_STATIC_LINK_LIBS})
+add_library(plasma_shared SHARED ${PLASMA_SRCS})
+set_target_properties(plasma_shared 
+                      PROPERTIES  LIBRARY_OUTPUT_DIRECTORY
+                                  "${BUILD_OUTPUT_ROOT_DIRECTORY}"
+                                  RUNTIME_OUTPUT_DIRECTORY
+                                  "${BUILD_OUTPUT_ROOT_DIRECTORY}"
+                                  PDB_OUTPUT_DIRECTORY
+                                  "${BUILD_OUTPUT_ROOT_DIRECTORY}"
+                                  OUTPUT_NAME
+                                  "plasma"
+                                  VERSION
+                                  "${ARROW_FULL_SO_VERSION}"
+                                  SOVERSION
+                                  "${ARROW_SO_VERSION}")
+target_link_libraries(plasma_shared ${BOOST_SYSTEM_LIBRARY} ${PLASMA_LINK_LIBS} )
+install(TARGETS plasma_shared ${INSTALL_IS_OPTIONAL}
+        EXPORT plasma_targets
+        RUNTIME DESTINATION ${RUNTIME_INSTALL_DIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
-add_dependencies(plasma ${PLASMA_LIBRARIES})
+add_library(plasma_static STATIC ${PLASMA_SRCS})
+set_target_properties(plasma_static
+                      PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${BUILD_OUTPUT_ROOT_DIRECTORY}" 
+                      OUTPUT_NAME "plasma")
+target_link_libraries(plasma_static ${BOOST_SYSTEM_LIBRARY} ${PLASMA_STATIC_LINK_LIBS} )
+install(TARGETS plasma_static ${INSTALL_IS_OPTIONAL}
+        EXPORT plasma_targets
+        RUNTIME DESTINATION ${RUNTIME_INSTALL_DIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
 
 foreach(LIB_TARGET ${PLASMA_LIBRARIES})
   target_compile_definitions(${LIB_TARGET} PRIVATE ARROW_EXPORTING)
@@ -108,7 +134,8 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   set_property(SOURCE dlmalloc.cc APPEND_STRING PROPERTY COMPILE_FLAGS " -Wno-conversion")
 endif()
 
-list(APPEND PLASMA_EXTERNAL_STORE_SOURCES "external_store.cc" "hash_table_store.cc")
+list(APPEND PLASMA_EXTERNAL_STORE_SOURCES "external_store.cc" "hash_table_store.cc" "vmemcache_store.cc" "tools/PlasmaProperties.cpp")
+link_libraries(vmemcache numa )
 
 # We use static libraries for the plasma-store-server executable so that it can
 # be copied around and used in different locations.
@@ -119,8 +146,8 @@ else()
   # Fallback to shared libs in the case that static libraries are not build.
   target_link_libraries(plasma-store-server plasma_shared ${PLASMA_LINK_LIBS})
 endif()
-add_dependencies(plasma plasma-store-server)
 
+add_dependencies(plasma plasma-store-server)
 if(ARROW_RPATH_ORIGIN)
   if(APPLE)
     set(_lib_install_rpath "@loader_path")
@@ -149,7 +176,6 @@ endif()
 install(FILES common.h
               compat.h
               client.h
-              events.h
               test_util.h
         DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/plasma")
 
@@ -190,11 +216,23 @@ if(ARROW_PLASMA_JAVA_CLIENT)
                           plasma_shared
                           ${PLASMA_LINK_LIBS}
                           "-undefined dynamic_lookup"
-                          ${PTHREAD_LIBRARY})
+                          ${PTHREAD_LIBRARY}
+                          vmemcache)
   else(APPLE)
-    target_link_libraries(plasma_java plasma_shared ${PLASMA_LINK_LIBS}
-                          ${PTHREAD_LIBRARY})
+    target_link_libraries(plasma_java
+                          plasma_shared
+                          ${PLASMA_LINK_LIBS}
+                          ${PTHREAD_LIBRARY}
+                          vmemcache
+                          numa
+                          )
   endif(APPLE)
+
+  install(TARGETS plasma_java ${INSTALL_IS_OPTIONAL}
+        RUNTIME DESTINATION ${RUNTIME_INSTALL_DIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 endif()
 #
 # Unit tests
@@ -223,14 +261,10 @@ if(ARROW_BUILD_SHARED)
 else()
   set(PLASMA_TEST_LIBS plasma_static ${PLASMA_STATIC_LINK_LIBS})
 endif()
-
+     
+add_plasma_test(test/plasma_properties_tests EXTRA_LINK_LIBS ${PLASMA_TEST_LIBS})
 add_plasma_test(test/serialization_tests EXTRA_LINK_LIBS ${PLASMA_TEST_LIBS})
 add_plasma_test(test/client_tests
-                EXTRA_LINK_LIBS
-                ${PLASMA_TEST_LIBS}
-                EXTRA_DEPENDENCIES
-                plasma-store-server)
-add_plasma_test(test/external_store_tests
                 EXTRA_LINK_LIBS
                 ${PLASMA_TEST_LIBS}
                 EXTRA_DEPENDENCIES
