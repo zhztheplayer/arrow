@@ -101,14 +101,29 @@ static parquet::ReaderProperties MakeReaderProperties(
   return properties;
 }
 
+void SetDictionaryColumns(const parquet::ParquetFileReader &reader,
+                          parquet::ArrowReaderProperties &properties,
+                          const std::unordered_set<std::string> &dict_columns) {
+  if (dict_columns.empty()) {
+    // default: dict-encode all columns
+    int num_columns = reader.metadata()->num_columns();
+    for (int i = 0; i < num_columns; i++) {
+      properties.set_read_dictionary(i, true);
+    }
+    return;
+  }
+  for (const std::string& name : dict_columns) {
+    auto column_index = reader.metadata()->schema()->ColumnIndex(name);
+    properties.set_read_dictionary(column_index, true);
+  }
+}
+
 static parquet::ArrowReaderProperties MakeArrowReaderProperties(
     const ParquetFileFormat& format, int64_t batch_size,
     const parquet::ParquetFileReader& reader) {
   parquet::ArrowReaderProperties properties(/* use_threads = */ false);
-  for (const std::string& name : format.reader_options.dict_columns) {
-    auto column_index = reader.metadata()->schema()->ColumnIndex(name);
-    properties.set_read_dictionary(column_index, true);
-  }
+  std::unordered_set<std::string> dict_columns = format.reader_options.dict_columns;
+  SetDictionaryColumns(reader, properties, dict_columns);
   properties.set_batch_size(batch_size);
   return properties;
 }
