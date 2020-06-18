@@ -27,8 +27,8 @@ import org.apache.arrow.memory.BaseAllocator;
 import org.apache.arrow.memory.BufferLedger;
 import org.apache.arrow.memory.NativeUnderlingMemory;
 import org.apache.arrow.memory.Ownerships;
-import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
+import org.apache.arrow.vector.ipc.message.ArrowDictionaryBatch;
 import org.apache.arrow.vector.ipc.message.ArrowFieldNode;
 import org.apache.arrow.vector.ipc.message.ArrowRecordBatch;
 import org.apache.arrow.vector.types.pojo.Schema;
@@ -58,7 +58,7 @@ public class NativeScanTask implements ScanTask, AutoCloseable {
     return new Itr() {
 
       private final Reader in = new Reader(JniWrapper.get().scan(scanTaskId));
-      private VectorSchemaRoot peek = null;
+      private ArrowBundledVectors peek = null;
 
       @Override
       public void close() throws Exception {
@@ -74,7 +74,7 @@ public class NativeScanTask implements ScanTask, AutoCloseable {
           if (!in.loadNextBatch()) {
             return false;
           }
-          peek = in.getVectorSchemaRoot();
+          peek = new ArrowBundledVectors(in.getVectorSchemaRoot(), in.getDictionaryVectors());
           return true;
         } catch (IOException e) {
           throw new RuntimeException(e);
@@ -82,7 +82,7 @@ public class NativeScanTask implements ScanTask, AutoCloseable {
       }
 
       @Override
-      public VectorSchemaRoot next() {
+      public ArrowBundledVectors next() {
         if (!hasNext()) {
           throw new NoSuchElementException();
         }
@@ -113,10 +113,26 @@ public class NativeScanTask implements ScanTask, AutoCloseable {
     public boolean loadNextBatch() throws IOException {
       // fixme it seems that the initialization is not thread-safe. Does caller already make it safe?
       ensureInitialized();
-      NativeRecordBatchHandle handle = JniWrapper.get().nextRecordBatch(recordBatchIteratorId);
-      if (handle == null) {
+      NativeRecordBatchHandle[] handles = JniWrapper.get().nextRecordBatch(recordBatchIteratorId);
+      if (handles == null) {
         return false;
       }
+      for (NativeRecordBatchHandle handle : handles) {
+        if (handle instanceof NativeDictionaryBatchHandle) {
+          NativeDictionaryBatchHandle dbh = (NativeDictionaryBatchHandle) handle;
+          ArrowRecordBatch dictionary = toArrowRecordBatch(dbh);
+          ArrowDictionaryBatch db = new ArrowDictionaryBatch(dbh.getId(), dictionary, false);
+          loadDictionary(db);
+          continue;
+        }
+        // todo add and use NativeDataRecordBatch
+        ArrowRecordBatch batch = toArrowRecordBatch(handle);
+        loadRecordBatch(batch);
+      }
+      return true;
+    }
+
+    private ArrowRecordBatch toArrowRecordBatch(NativeRecordBatchHandle handle) {
       final ArrayList<ArrowBuf> buffers = new ArrayList<>();
       for (NativeRecordBatchHandle.Buffer buffer : handle.getBuffers()) {
         final BaseAllocator allocator = context.getAllocator();
@@ -127,14 +143,12 @@ public class NativeScanTask implements ScanTask, AutoCloseable {
         buffers.add(buf);
       }
       try {
-        loadRecordBatch(
-            new ArrowRecordBatch((int) handle.getNumRows(), handle.getFields().stream()
-                .map(field -> new ArrowFieldNode((int) field.length, (int) field.nullCount))
-                .collect(Collectors.toList()), buffers));
+        return new ArrowRecordBatch((int) handle.getNumRows(), handle.getFields().stream()
+            .map(field -> new ArrowFieldNode((int) field.length, (int) field.nullCount))
+            .collect(Collectors.toList()), buffers);
       } finally {
         buffers.forEach(b -> b.getReferenceManager().release());
       }
-      return true;
     }
 
     @Override

@@ -24,11 +24,11 @@
 #include <arrow/util/iterator.h>
 #include <google/protobuf/io/coded_stream.h>
 #include <google/protobuf/message.h>
-#include "arrow/compute/kernel.h"
-#include "arrow/compute/kernels/cast.h"
-#include "arrow/compute/kernels/compare.h"
-#include "jni/dataset/DTypes.pb.h"
-#include "jni/dataset/concurrent_map.h"
+#include <arrow/compute/kernel.h>
+#include <arrow/compute/kernels/cast.h>
+#include <arrow/compute/kernels/compare.h>
+#include <jni/dataset/DTypes.pb.h>
+#include <jni/dataset/concurrent_map.h>
 
 #include "org_apache_arrow_dataset_file_JniWrapper.h"
 #include "org_apache_arrow_dataset_jni_JniWrapper.h"
@@ -40,10 +40,12 @@ static jclass runtime_exception_class;
 static jclass record_batch_handle_class;
 static jclass record_batch_handle_field_class;
 static jclass record_batch_handle_buffer_class;
+static jclass dictionary_batch_handle_class;
 
 static jmethodID record_batch_handle_constructor;
 static jmethodID record_batch_handle_field_constructor;
 static jmethodID record_batch_handle_buffer_constructor;
+static jmethodID dictionary_batch_handle_constructor;
 
 static jint JNI_VERSION = JNI_VERSION_1_6;
 
@@ -119,6 +121,15 @@ jint JNI_OnLoad(JavaVM* vm, void* reserved) {
       GetMethodID(env, record_batch_handle_class, "<init>",
                   "(J[Lorg/apache/arrow/dataset/jni/NativeRecordBatchHandle$Field;"
                   "[Lorg/apache/arrow/dataset/jni/NativeRecordBatchHandle$Buffer;)V");
+
+  dictionary_batch_handle_class = CreateGlobalClassReference(
+      env, "Lorg/apache/arrow/dataset/jni/NativeDictionaryBatchHandle;");
+
+  dictionary_batch_handle_constructor =
+      GetMethodID(env, dictionary_batch_handle_class, "<init>",
+                  "(JJ[Lorg/apache/arrow/dataset/jni/NativeRecordBatchHandle$Field;"
+                  "[Lorg/apache/arrow/dataset/jni/NativeRecordBatchHandle$Buffer;)V");
+
   record_batch_handle_field_constructor =
       GetMethodID(env, record_batch_handle_field_class, "<init>", "(JJ)V");
   record_batch_handle_buffer_constructor =
@@ -138,6 +149,7 @@ void JNI_OnUnload(JavaVM* vm, void* reserved) {
   env->DeleteGlobalRef(record_batch_handle_class);
   env->DeleteGlobalRef(record_batch_handle_field_class);
   env->DeleteGlobalRef(record_batch_handle_buffer_class);
+  env->DeleteGlobalRef(dictionary_batch_handle_class);
 
   dataset_factory_holder_.Clear();
   dataset_holder_.Clear();
@@ -217,6 +229,14 @@ std::vector<T> collect(JNIEnv* env, arrow::Iterator<T> itr) {
     vector.push_back(t);
   }
   return vector;
+}
+
+jobjectArray makeObjectArray(JNIEnv* env, jclass clazz, std::vector<jobject> args) {
+  jobjectArray oa = env->NewObjectArray(args.size(), clazz, 0);
+  for (size_t i = 0; i < args.size(); i++) {
+    env->SetObjectArrayElement(oa, i, args.at(i));
+  }
+  return oa;
 }
 
 // FIXME: COPIED FROM intel/master on which this branch is not rebased yet
@@ -512,19 +532,10 @@ JNIEXPORT jlong JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_scan(
       std::move(record_batch_iterator)));  // move and propagate
 }
 
-/*
- * Class:     org_apache_arrow_dataset_jni_JniWrapper
- * Method:    nextRecordBatch
- * Signature: (J)Lorg/apache/arrow/dataset/jni/NativeRecordBatchHandle;
- */
-JNIEXPORT jobject JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_nextRecordBatch(
-    JNIEnv* env, jobject, jlong iterator_id) {
-  std::shared_ptr<arrow::RecordBatchIterator> itr = iterator_holder_.Lookup(iterator_id);
-
-  JNI_ASSIGN_OR_THROW(std::shared_ptr<arrow::RecordBatch> record_batch, itr->Next())
-  if (record_batch == nullptr) {
-    return nullptr;  // stream ended
-  }
+template<typename HandleCreator>
+jobject createJavaHandle(JNIEnv *env,
+    std::shared_ptr<arrow::RecordBatch> &record_batch,
+    HandleCreator handle_creator) {
   std::shared_ptr<arrow::Schema> schema = record_batch->schema();
   jobjectArray field_array =
       env->NewObjectArray(schema->num_fields(), record_batch_handle_field_class, nullptr);
@@ -561,10 +572,78 @@ JNIEXPORT jobject JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_nextRecor
         buffer_holder_.Insert(buffer), data, size, capacity);
     env->SetObjectArrayElement(buffer_array, j, buffer_handle);
   }
-
-  jobject ret = env->NewObject(record_batch_handle_class, record_batch_handle_constructor,
-                               record_batch->num_rows(), field_array, buffer_array);
+  int64_t num_rows = record_batch->num_rows();
+  jobject ret = handle_creator(num_rows, field_array, buffer_array);
   return ret;
+}
+
+jobject createJavaRecordBatchHandle(JNIEnv *env,
+    std::shared_ptr<arrow::RecordBatch> &record_batch) {
+  auto handle_creator = [env] (int64_t num_rows, jobjectArray field_array,
+      jobjectArray buffer_array) {
+    return env->NewObject(record_batch_handle_class, record_batch_handle_constructor,
+        num_rows, field_array, buffer_array);
+  };
+  return createJavaHandle(env, record_batch, handle_creator);
+}
+
+jobject createJavaDictionaryBatchHandle(JNIEnv *env, jlong id,
+    std::shared_ptr<arrow::RecordBatch> &record_batch) {
+  auto handle_creator = [env, id] (int64_t num_rows, jobjectArray field_array,
+                               jobjectArray buffer_array) {
+    return env->NewObject(dictionary_batch_handle_class,
+        dictionary_batch_handle_constructor, id, num_rows, field_array, buffer_array);
+  };
+  return createJavaHandle(env, record_batch, handle_creator);
+}
+
+/*
+ * Class:     org_apache_arrow_dataset_jni_JniWrapper
+ * Method:    nextRecordBatch
+ * Signature: (J)[Lorg/apache/arrow/dataset/jni/NativeRecordBatchHandle;
+ */
+jobjectArray JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_nextRecordBatch(
+    JNIEnv* env, jobject, jlong iterator_id) {
+  std::shared_ptr<arrow::RecordBatchIterator> itr = iterator_holder_.Lookup(iterator_id);
+
+  JNI_ASSIGN_OR_THROW(std::shared_ptr<arrow::RecordBatch> record_batch, itr->Next())
+  if (record_batch == nullptr) {
+    return nullptr;  // stream ended
+  }
+  std::vector<jobject> handles;
+  jobject handle = createJavaRecordBatchHandle(env, record_batch);
+  handles.push_back(handle);
+
+  // dictionary batches
+  int num_columns = record_batch->num_columns();
+  long dict_id = 0;
+  for (int i = 0; i < num_columns; i++) {
+    // defer to Java dictionary batch rule: a single array per batch
+    std::shared_ptr<arrow::Field> field = record_batch->schema()->field(i);
+    std::shared_ptr<arrow::Array> data = record_batch->column(i);
+    std::shared_ptr<arrow::DataType> type = field->type();
+    if (type->id() == arrow::Type::DICTIONARY) {
+      std::shared_ptr<arrow::DataType> value_type =
+          arrow::internal::checked_cast<const arrow::DictionaryType &>(*type)
+              .value_type();
+      std::shared_ptr<arrow::DictionaryArray> dict_data =
+          arrow::internal::checked_pointer_cast<arrow::DictionaryArray>(data);
+      std::shared_ptr<arrow::Field>
+          value_field = std::make_shared<arrow::Field>(field->name(), value_type);
+      std::vector<std::shared_ptr<arrow::Field>> dict_batch_fields;
+      dict_batch_fields.push_back(value_field);
+      std::shared_ptr<arrow::Schema>
+          dict_batch_schema = std::make_shared<arrow::Schema>(dict_batch_fields);
+      std::vector<std::shared_ptr<arrow::Array>> dict_datum;
+      dict_datum.push_back(dict_data->dictionary());
+      std::shared_ptr<arrow::RecordBatch>
+          dict_batch = arrow::RecordBatch::Make(dict_batch_schema, dict_data->length(),
+              dict_datum);
+      jobject dict_handle = createJavaDictionaryBatchHandle(env, dict_id++, dict_batch);
+      handles.push_back(dict_handle);
+    }
+  }
+  return makeObjectArray(env, record_batch_handle_class, handles);
 }
 
 /*

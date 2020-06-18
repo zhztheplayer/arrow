@@ -20,6 +20,7 @@ package org.apache.arrow.dataset.jni;
 import java.io.File;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.stream.Collectors;
@@ -39,6 +40,7 @@ import org.apache.arrow.dataset.source.Dataset;
 import org.apache.arrow.dataset.source.DatasetFactory;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.dictionary.Dictionary;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.junit.Assert;
 import org.junit.Ignore;
@@ -71,11 +73,11 @@ public class NativeDatasetTest {
     Assert.assertEquals(1, scanTasks.size());
 
     ScanTask scanTask = scanTasks.get(0);
-    List<? extends VectorSchemaRoot> data = collect(scanTask.scan());
+    List<? extends ScanTask.ArrowBundledVectors> data = collect(scanTask.scan());
     Assert.assertNotNull(data);
     // 1000 rows total in file userdata1.parquet
     Assert.assertEquals(10, data.size());
-    VectorSchemaRoot vsr = data.get(0);
+    VectorSchemaRoot vsr = data.get(0).valueVectors;
     Assert.assertEquals(100, vsr.getRowCount());
 
 
@@ -118,7 +120,7 @@ public class NativeDatasetTest {
   }
 
   @Test
-  public void testScanner() {
+  public void testScanner() throws Exception {
     String path = sampleParquet();
     RootAllocator allocator = new RootAllocator(Long.MAX_VALUE);
     NativeDatasetFactory factory = new SingleFileDatasetFactory(
@@ -138,11 +140,11 @@ public class NativeDatasetTest {
     while (itr.hasNext()) {
       // FIXME VectorSchemaRoot is not actually something ITERABLE.// Using a reader convention instead.
       vsrCount++;
-      vsr = itr.next();
+      vsr = itr.next().valueVectors;
       Assert.assertEquals(100, vsr.getRowCount());
 
       // check if projector is applied
-      Assert.assertEquals("Schema<id: Int(32, true), title: Utf8>",
+      Assert.assertEquals("Schema<id: Int(32, true), title: Int(32, true)[dictionary: 0]>",
           vsr.getSchema().toString());
     }
     Assert.assertEquals(10, vsrCount);
@@ -150,11 +152,12 @@ public class NativeDatasetTest {
     if (vsr != null) {
       vsr.close();
     }
+    itr.close();
     allocator.close();
   }
 
   @Test
-  public void testScannerWithFilter() {
+  public void testScannerWithFilter() throws Exception {
     String path = sampleParquet();
     RootAllocator allocator = new RootAllocator(Long.MAX_VALUE);
     NativeDatasetFactory factory = new SingleFileDatasetFactory(
@@ -188,19 +191,25 @@ public class NativeDatasetTest {
     int rowCount = 0;
     while (itr.hasNext()) {
       // FIXME VectorSchemaRoot is not actually something ITERABLE. Using a reader convention instead.
-      vsr = itr.next();
+      ScanTask.ArrowBundledVectors bundledVectors = itr.next();
+      vsr = bundledVectors.valueVectors;
+      Map<Long, Dictionary> dvs = bundledVectors.dictionaryVectors;
       // only the line with id = 500 selected
       rowCount += vsr.getRowCount();
 
       // check if projector is applied
-      Assert.assertEquals("Schema<id: Int(32, true), title: Utf8>",
+      Assert.assertEquals("Schema<id: Int(32, true), title: Int(32, true)[dictionary: 0]>",
           vsr.getSchema().toString());
+
+      // dictionaries
+      Assert.assertEquals(1, dvs.size());
     }
-    Assert.assertEquals(1, rowCount);
+    Assert.assertEquals(1000, rowCount);
 
     if (vsr != null) {
       vsr.close();
     }
+    itr.close();
     allocator.close();
   }
 
@@ -225,7 +234,7 @@ public class NativeDatasetTest {
     int rowCount = 0;
     while (itr.hasNext()) {
       // FIXME VectorSchemaRoot is not actually something ITERABLE. Using a reader convention instead.
-      vsr = itr.next();
+      vsr = itr.next().valueVectors;
       rowCount += vsr.getRowCount();
 
       // check if projector is applied

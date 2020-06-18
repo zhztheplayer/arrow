@@ -18,8 +18,10 @@
 package org.apache.arrow.dataset.scanner;
 
 import java.util.Iterator;
+import java.util.Map;
 
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.dictionary.Dictionary;
 
 /**
  * Read record batches from a range of a single data fragment. A
@@ -36,7 +38,20 @@ public interface ScanTask {
   /**
    * The iterator implementation for {@link VectorSchemaRoot}s.
    */
-  interface Itr extends Iterator<VectorSchemaRoot>, AutoCloseable {
+  interface Itr extends Iterator<ArrowBundledVectors>, AutoCloseable {
     // FIXME VectorSchemaRoot is not actually something ITERABLE. Using a reader convention instead.
+  }
+
+  /**
+   * Emitted vectors including both values and dictionaries.
+   */
+  class ArrowBundledVectors {
+    public final VectorSchemaRoot valueVectors;
+    public final Map<Long, Dictionary> dictionaryVectors;
+
+    public ArrowBundledVectors(VectorSchemaRoot valueVectors, Map<Long, Dictionary> dictionaryVectors) {
+      this.valueVectors = valueVectors;
+      this.dictionaryVectors = dictionaryVectors;
+    }
   }
 }
