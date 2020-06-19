@@ -104,7 +104,7 @@ static parquet::ReaderProperties MakeReaderProperties(
 void SetDictionaryColumns(const parquet::ParquetFileReader &reader,
                           parquet::ArrowReaderProperties &properties,
                           const std::unordered_set<std::string> &dict_columns) {
-  if (dict_columns.empty()) {
+  if (dict_columns.empty() && std::getenv("FORCE_ENCODE")) {
     // default: dict-encode all columns
     int num_columns = reader.metadata()->num_columns();
     for (int i = 0; i < num_columns; i++) {
