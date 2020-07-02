@@ -90,6 +90,15 @@ Result<ScanTaskIterator> Scanner::Scan() {
   return MakeMapIterator(wrap_scan_task, std::move(scan_task_it));
 }
 
+Result<ScanTaskIterator> Scanner::ScanWithWeakFilter() {
+  auto scan_task_it = GetScanTaskIterator(GetFragments(), scan_context_);
+
+  auto wrap_scan_task = [](std::shared_ptr<ScanTask> task) -> std::shared_ptr<ScanTask> {
+    return std::make_shared<ProjectScanTask>(std::move(task));
+  };
+  return MakeMapIterator(wrap_scan_task, std::move(scan_task_it));
+}
+
 Result<ScanTaskIterator> ScanTaskIteratorFromRecordBatch(
     std::vector<std::shared_ptr<RecordBatch>> batches,
     std::shared_ptr<ScanOptions> options, std::shared_ptr<ScanContext> context) {

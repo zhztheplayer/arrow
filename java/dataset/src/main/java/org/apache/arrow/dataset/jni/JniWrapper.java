@@ -52,7 +52,7 @@ public class JniWrapper {
 
   public native long scan(long scanTaskId);
 
-  public native NativeRecordBatchHandle nextRecordBatch(long recordBatchIteratorId);
+  public native NativeRecordBatchHandle[] nextRecordBatch(long recordBatchIteratorId);
 
   public native void closeIterator(long id);
 

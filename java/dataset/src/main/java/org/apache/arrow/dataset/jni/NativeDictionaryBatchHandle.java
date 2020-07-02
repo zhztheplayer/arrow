@@ -15,31 +15,27 @@
  * limitations under the License.
  */
 
-package org.apache.arrow.memory;
+package org.apache.arrow.dataset.jni;
 
 /**
- * Utility class managing ownership's transferring between Native Arrow buffers and Java Arrow buffers.
+ * Hold pointers to a Arrow C++ DictionaryBatch.
  */
-public class Ownerships {
-  private static final Ownerships INSTANCE = new Ownerships();
-
-  private Ownerships() {
-  }
-
-  public static Ownerships get() {
-    return INSTANCE;
-  }
+public class NativeDictionaryBatchHandle extends NativeRecordBatchHandle {
 
   /**
-   * Returned ledger's ref count is initialized or increased by 1.
+   * Dictionary ID.
    */
-  public BufferLedger takeOwnership(BaseAllocator allocator, AllocationManager allocationManager) {
-    final BufferLedger ledger = allocationManager.associate(allocator);
-    boolean succeed = allocator.forceAllocate(allocationManager.getSize());
-    if (!succeed) {
-      throw new OutOfMemoryException("Target allocator is full");
-    }
-    allocationManager.setOwningLedger(ledger);
-    return ledger;
+  private final long id;
+
+  /**
+   * Constructor.
+   */
+  public NativeDictionaryBatchHandle(long id, long numRows, Field[] fields, Buffer[] buffers) {
+    super(numRows, fields, buffers);
+    this.id = id;
+  }
+
+  public long getId() {
+    return id;
   }
 }
