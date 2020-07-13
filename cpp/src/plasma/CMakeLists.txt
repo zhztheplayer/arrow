@@ -50,7 +50,6 @@ set(PLASMA_SRCS
     malloc.cc
     plasma.cc
     protocol.cc
-    tools/PlasmaProperties.cpp
     ${PLASMA_IO_SRCS})
 
 set(PLASMA_STORE_SRCS
@@ -134,8 +133,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   set_property(SOURCE dlmalloc.cc APPEND_STRING PROPERTY COMPILE_FLAGS " -Wno-conversion")
 endif()
 
-list(APPEND PLASMA_EXTERNAL_STORE_SOURCES "external_store.cc" "hash_table_store.cc" "vmemcache_store.cc" "tools/PlasmaProperties.cpp")
-link_libraries(vmemcache numa )
+list(APPEND PLASMA_EXTERNAL_STORE_SOURCES "external_store.cc" "hash_table_store.cc")
 
 # We use static libraries for the plasma-store-server executable so that it can
 # be copied around and used in different locations.
@@ -217,14 +215,12 @@ if(ARROW_PLASMA_JAVA_CLIENT)
                           ${PLASMA_LINK_LIBS}
                           "-undefined dynamic_lookup"
                           ${PTHREAD_LIBRARY}
-                          vmemcache)
+                          )
   else(APPLE)
     target_link_libraries(plasma_java
                           plasma_shared
                           ${PLASMA_LINK_LIBS}
                           ${PTHREAD_LIBRARY}
-                          vmemcache
-                          numa
                           )
   endif(APPLE)
 
@@ -262,7 +258,6 @@ else()
   set(PLASMA_TEST_LIBS plasma_static ${PLASMA_STATIC_LINK_LIBS})
 endif()
      
-add_plasma_test(test/plasma_properties_tests EXTRA_LINK_LIBS ${PLASMA_TEST_LIBS})
 add_plasma_test(test/serialization_tests EXTRA_LINK_LIBS ${PLASMA_TEST_LIBS})
 add_plasma_test(test/client_tests
                 EXTRA_LINK_LIBS
