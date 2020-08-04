@@ -817,4 +817,55 @@ TEST_F(TestProjector, TestCastToUTF8) {
   EXPECT_ARROW_ARRAY_EQUALS(exp_1, outputs.at(1));
 }
 
+TEST_F(TestProjector, TestCastToByte) {
+  // schema for input fields
+  auto field_int16 = field("f_int16", arrow::int16());
+  auto field_int64 = field("f_int64", arrow::int64());
+  auto field_int32 = field("f_int32", arrow::int32());
+  auto schema = arrow::schema({field_int16, field_int64, field_int32});
+
+  // output fields
+  auto field_0 = field("out_0", arrow::int8());
+  auto field_1 = field("out_1", arrow::int8());
+  auto field_2 = field("out_2", arrow::int8());
+
+  // Build expression
+  auto node_a = TreeExprBuilder::MakeField(field_int16);
+  auto node_b = TreeExprBuilder::MakeField(field_int64);
+  auto node_c = TreeExprBuilder::MakeField(field_int32);
+  auto func0 = TreeExprBuilder::MakeFunction("castBYTE", {node_a}, arrow::int8());
+  auto expr0 = TreeExprBuilder::MakeExpression(func0, field_0);
+  auto func1 = TreeExprBuilder::MakeFunction("castBYTE", {node_b}, arrow::int8());
+  auto expr1 = TreeExprBuilder::MakeExpression(func1, field_1);
+  auto func2 = TreeExprBuilder::MakeFunction("castBYTE", {node_c}, arrow::int8());
+  auto expr2 = TreeExprBuilder::MakeExpression(func2, field_2);
+
+  std::shared_ptr<Projector> projector;
+  auto status =
+      Projector::Make(schema, {expr0, expr1, expr2}, TestConfiguration(), &projector);
+  EXPECT_TRUE(status.ok()) << status.message();
+
+  // Create a row-batch with some sample data
+  int num_records = 4;
+  auto array0 = MakeArrowArrayInt16({5, 6, 7, 8}, {true, true, true, true});
+  auto array1 = MakeArrowArrayInt64({5L, 6L, 7L, 257L}, {true, true, true, true});
+  auto array2 = MakeArrowArrayInt32({5, 6, 7, 8}, {true, true, true, true});
+  // expected output
+  auto exp_0 = MakeArrowArrayInt8({5, 6, 7, 8}, {true, true, true, true});
+  auto exp_1 = MakeArrowArrayInt8({5, 6, 7, 1}, {true, true, true, true});
+  auto exp_2 = MakeArrowArrayInt8({5, 6, 7, 8}, {true, true, true, true});
+
+  // prepare input record batch
+  auto in_batch = arrow::RecordBatch::Make(schema, num_records, {array0, array1, array2});
+
+  // Evaluate expression
+  arrow::ArrayVector outputs;
+  status = projector->Evaluate(*in_batch, pool_, &outputs);
+  EXPECT_TRUE(status.ok()) << status.message();
+
+  // Validate results
+  EXPECT_ARROW_ARRAY_EQUALS(exp_0, outputs.at(0));
+  EXPECT_ARROW_ARRAY_EQUALS(exp_1, outputs.at(1));
+  EXPECT_ARROW_ARRAY_EQUALS(exp_2, outputs.at(2));
+}
 }  // namespace gandiva
