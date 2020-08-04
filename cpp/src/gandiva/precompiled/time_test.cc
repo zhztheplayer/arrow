@@ -657,4 +657,13 @@ TEST(TestTime, castVarcharTimestamp) {
   EXPECT_EQ(std::string(out, out_len), "0002-05-01 00:00:04.000");
 }
 
+TEST(TestTime, castVarcharDate) {
+  ExecutionContext context;
+  int64_t context_ptr = reinterpret_cast<int64_t>(&context);
+  gdv_int32 out_len;
+  gdv_date32 date = castDATE_utf8(context_ptr, "1967-12-1", 9);
+  const char* out = castVARCHAR_date32_int64(context_ptr, date, 10L, &out_len);
+  EXPECT_EQ(std::string(out, out_len), "1967-12-01");
+}
+
 }  // namespace gandiva

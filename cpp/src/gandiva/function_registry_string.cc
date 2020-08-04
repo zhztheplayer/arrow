@@ -65,6 +65,30 @@ std::vector<NativeFunction> GetStringFunctionRegistry() {
       NativeFunction("lower", {}, DataTypeVector{utf8()}, utf8(), kResultNullIfNull,
                      "lower_utf8", NativeFunction::kNeedsContext),
 
+      NativeFunction("castVARCHAR", {}, DataTypeVector{int8(), int64()}, utf8(),
+                     kResultNullIfNull, "castVARCHAR_int8_int64",
+                     NativeFunction::kNeedsContext),
+
+      NativeFunction("castVARCHAR", {}, DataTypeVector{int16(), int64()}, utf8(),
+                     kResultNullIfNull, "castVARCHAR_int16_int64",
+                     NativeFunction::kNeedsContext),
+
+      NativeFunction("castVARCHAR", {}, DataTypeVector{int32(), int64()}, utf8(),
+                     kResultNullIfNull, "castVARCHAR_int32_int64",
+                     NativeFunction::kNeedsContext),
+
+      NativeFunction("castVARCHAR", {}, DataTypeVector{int64(), int64()}, utf8(),
+                     kResultNullIfNull, "castVARCHAR_int64_int64",
+                     NativeFunction::kNeedsContext),
+
+      NativeFunction("castVARCHAR", {}, DataTypeVector{float32(), int64()}, utf8(),
+                     kResultNullIfNull, "castVARCHAR_float32_int64",
+                     NativeFunction::kNeedsContext),
+
+      NativeFunction("castVARCHAR", {}, DataTypeVector{float64(), int64()}, utf8(),
+                     kResultNullIfNull, "castVARCHAR_float64_int64",
+                     NativeFunction::kNeedsContext),
+
       NativeFunction("castVARCHAR", {}, DataTypeVector{utf8(), int64()}, utf8(),
                      kResultNullIfNull, "castVARCHAR_utf8_int64",
                      NativeFunction::kNeedsContext),

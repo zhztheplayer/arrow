@@ -17,6 +17,7 @@
 
 #include <cmath>
 
+#include <arrow/type.h>
 #include <gtest/gtest.h>
 
 #include "arrow/memory_pool.h"
@@ -764,6 +765,56 @@ TEST_F(TestProjector, TestOffset) {
 
   // Validate results
   EXPECT_ARROW_ARRAY_EQUALS(exp_sum, outputs.at(0));
+}
+
+TEST_F(TestProjector, TestCastToUTF8) {
+  // schema for input fields
+  auto field_float64 = field("f_float64", arrow::float64());
+  auto field_int32 = field("f_int32", arrow::int32());
+  auto schema = arrow::schema({field_float64, field_int32});
+
+  // output fields
+  auto field_0 = field("float64_str", arrow::utf8());
+  auto field_1 = field("int32_str", arrow::utf8());
+
+  // Build expression
+  auto node_a = TreeExprBuilder::MakeField(field_float64);
+  auto node_b = TreeExprBuilder::MakeField(field_int32);
+  auto int64_literal_0 = TreeExprBuilder::MakeLiteral(21L);
+  auto int64_literal_1 = TreeExprBuilder::MakeLiteral(11L);
+  auto func0 = TreeExprBuilder::MakeFunction("castVARCHAR", {node_a, int64_literal_0},
+                                             arrow::utf8());
+  auto expr0 = TreeExprBuilder::MakeExpression(func0, field_0);
+  auto func1 = TreeExprBuilder::MakeFunction("castVARCHAR", {node_b, int64_literal_1},
+                                             arrow::utf8());
+  auto expr1 = TreeExprBuilder::MakeExpression(func1, field_1);
+
+  std::shared_ptr<Projector> projector;
+  auto status = Projector::Make(schema, {expr0, expr1}, TestConfiguration(), &projector);
+  EXPECT_TRUE(status.ok()) << status.message();
+
+  // Create a row-batch with some sample data
+  int num_records = 4;
+  auto array0 = MakeArrowArrayFloat64({1.989278f, 5.892732f, -23487.300781f, 9.712717f},
+                                      {true, true, true, true});
+  auto array1 = MakeArrowArrayInt32({5, 6, 7, 8}, {true, true, true, true});
+  // expected output
+  auto exp_0 = MakeArrowArray<arrow::StringType, std::string>(
+      {"1.989278", "5.892732", "-23487.300781", "9.712717"}, {true, true, true, true});
+  auto exp_1 = MakeArrowArray<arrow::StringType, std::string>({"5", "6", "7", "8"},
+                                                              {true, true, true, true});
+
+  // prepare input record batch
+  auto in_batch = arrow::RecordBatch::Make(schema, num_records, {array0, array1});
+
+  // Evaluate expression
+  arrow::ArrayVector outputs;
+  status = projector->Evaluate(*in_batch, pool_, &outputs);
+  EXPECT_TRUE(status.ok()) << status.message();
+
+  // Validate results
+  EXPECT_ARROW_ARRAY_EQUALS(exp_0, outputs.at(0));
+  EXPECT_ARROW_ARRAY_EQUALS(exp_1, outputs.at(1));
 }
 
 }  // namespace gandiva
