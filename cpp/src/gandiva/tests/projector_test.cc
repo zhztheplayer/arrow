@@ -795,12 +795,12 @@ TEST_F(TestProjector, TestCastToUTF8) {
 
   // Create a row-batch with some sample data
   int num_records = 4;
-  auto array0 = MakeArrowArrayFloat64({1.989278f, 5.892732f, -23487.300781f, 9.712717f},
+  auto array0 = MakeArrowArrayFloat64({1989278888.23f, 5.892732f, -23487.3f, 9.712717f},
                                       {true, true, true, true});
   auto array1 = MakeArrowArrayInt32({5, 6, 7, 8}, {true, true, true, true});
   // expected output
   auto exp_0 = MakeArrowArray<arrow::StringType, std::string>(
-      {"1.989278", "5.892732", "-23487.300781", "9.712717"}, {true, true, true, true});
+      {"1.98928e+09", "5.89273", "-23487.3", "9.71272"}, {true, true, true, true});
   auto exp_1 = MakeArrowArray<arrow::StringType, std::string>({"5", "6", "7", "8"},
                                                               {true, true, true, true});
 

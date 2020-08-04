@@ -20,6 +20,7 @@ extern "C" {
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
+#include <cfloat>
 #include "./types.h"
 
 // Expand inner macro for all numeric types.
@@ -125,14 +126,18 @@ CAST_UNARY(castFLOAT8, float32, float64)
 CAST_UNARY(castFLOAT4, float64, float32)
 
 #undef CAST_UNARY
+#define nothing
+#define PRINT(DIGSF, DIGS, FMT) PRINT_##DIGSF(DIGS, FMT)
+#define PRINT_NOFMT(DIGS, FMT) int res = snprintf(char_buffer, length, FMT, in);
+#define PRINT_FMT(DIGS, FMT) int res = snprintf(char_buffer, length, FMT, DIGS, in);
 
-#define CAST_UNARY_UTF8(NAME, IN_TYPE, OUT_TYPE, FMT)                                    \
+#define CAST_UNARY_UTF8(NAME, IN_TYPE, OUT_TYPE, FMT, DIGSF, DIGS)                       \
   FORCE_INLINE                                                                           \
   const char* NAME##_##IN_TYPE##_int64(gdv_int64 context, gdv_##IN_TYPE in,              \
                                        gdv_int64 length, gdv_int32 * out_len) {          \
     const int32_t char_buffer_length = length;                                           \
     char char_buffer[char_buffer_length];                                                \
-    int res = snprintf(char_buffer, length, FMT, in);                                    \
+    PRINT(DIGSF, DIGS, FMT)                                                              \
     if (res < 0) {                                                                       \
       gdv_fn_context_set_error_msg(context, "Could not format the ##IN_TYPE");           \
       return "";                                                                         \
@@ -151,12 +156,14 @@ CAST_UNARY(castFLOAT4, float64, float32)
     return ret;                                                                          \
   }
 
-CAST_UNARY_UTF8(castVARCHAR, int8, utf8, "%d")
-CAST_UNARY_UTF8(castVARCHAR, int16, utf8, "%d")
-CAST_UNARY_UTF8(castVARCHAR, int32, utf8, "%d")
-CAST_UNARY_UTF8(castVARCHAR, int64, utf8, "%ld")
-CAST_UNARY_UTF8(castVARCHAR, float32, utf8, "%f")
-CAST_UNARY_UTF8(castVARCHAR, float64, utf8, "%lf")
+CAST_UNARY_UTF8(castVARCHAR, int8, utf8, "%d", NOFMT, nothing)
+CAST_UNARY_UTF8(castVARCHAR, int16, utf8, "%d", NOFMT, nothing)
+CAST_UNARY_UTF8(castVARCHAR, int32, utf8, "%d", NOFMT, nothing)
+CAST_UNARY_UTF8(castVARCHAR, int64, utf8, "%ld", NOFMT, nothing)
+// CAST_UNARY_UTF8(castVARCHAR, float32, utf8, "%.*f", FMT, FLT_DIG)
+// CAST_UNARY_UTF8(castVARCHAR, float64, utf8, "%.*f", FMT, DBL_DIG)
+CAST_UNARY_UTF8(castVARCHAR, float32, utf8, "%g", NOFMT, nothing)
+CAST_UNARY_UTF8(castVARCHAR, float64, utf8, "%g", NOFMT, nothing)
 
 #undef CAST_UNARY_UTF8
 
