@@ -70,6 +70,12 @@ extern "C" {
 NUMERIC_TYPES(BINARY_SYMMETRIC, add, +)
 NUMERIC_TYPES(BINARY_SYMMETRIC, subtract, -)
 NUMERIC_TYPES(BINARY_SYMMETRIC, multiply, *)
+BINARY_SYMMETRIC(bitwise_and, int32, &)
+BINARY_SYMMETRIC(bitwise_and, int64, &)
+BINARY_SYMMETRIC(bitwise_or, int32, |)
+BINARY_SYMMETRIC(bitwise_or, int64, |)
+BINARY_SYMMETRIC(bitwise_xor, int32, ^)
+BINARY_SYMMETRIC(bitwise_xor, int64, ^)
 
 #undef BINARY_SYMMETRIC
 
@@ -307,6 +313,15 @@ SHIFT_RIGHT_INT(int32, int32)
 SHIFT_RIGHT_INT(int64, int32)
 
 #undef SHIFT_RIGHT_INT
+
+#define BITWISE_NOT(TYPE) \
+  FORCE_INLINE            \
+  gdv_##TYPE bitwise_not_##TYPE(gdv_##TYPE in) { return static_cast<gdv_##TYPE>(~in); }
+
+BITWISE_NOT(int32)
+BITWISE_NOT(int64)
+
+#undef BITWISE_NOT
 
 #undef DATE_FUNCTION
 #undef DATE_TYPES
