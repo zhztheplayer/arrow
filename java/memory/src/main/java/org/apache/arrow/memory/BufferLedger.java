@@ -89,6 +89,9 @@ public class BufferLedger implements ValueWithKeyIncluded<BaseAllocator>, Refere
    * will share the ref count.
    */
   void increment() {
+    if (BaseAllocator.DEBUG) {
+      historicalLog.recordEvent("increment()");
+    }
     bufRefCnt.incrementAndGet();
   }
 
