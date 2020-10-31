@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Spliterator;
 import java.util.Spliterators;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -38,6 +39,8 @@ import org.apache.arrow.dataset.scanner.ScanTask;
 import org.apache.arrow.dataset.scanner.Scanner;
 import org.apache.arrow.dataset.source.Dataset;
 import org.apache.arrow.dataset.source.DatasetFactory;
+import org.apache.arrow.memory.NativeDirectMemoryReservation;
+import org.apache.arrow.memory.NativeMemoryReservation;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.dictionary.Dictionary;
@@ -46,7 +49,6 @@ import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Test;
 
-@Ignore
 public class NativeDatasetTest {
 
   private String sampleParquet() {
@@ -144,7 +146,7 @@ public class NativeDatasetTest {
       Assert.assertEquals(100, vsr.getRowCount());
 
       // check if projector is applied
-      Assert.assertEquals("Schema<id: Int(32, true), title: Int(32, true)[dictionary: 0]>",
+      Assert.assertEquals("Schema<id: Int(32, true), title: Utf8>",
           vsr.getSchema().toString());
     }
     Assert.assertEquals(10, vsrCount);
@@ -198,11 +200,11 @@ public class NativeDatasetTest {
       rowCount += vsr.getRowCount();
 
       // check if projector is applied
-      Assert.assertEquals("Schema<id: Int(32, true), title: Int(32, true)[dictionary: 0]>",
+      Assert.assertEquals("Schema<id: Int(32, true), title: Utf8>",
           vsr.getSchema().toString());
 
       // dictionaries
-      Assert.assertEquals(1, dvs.size());
+      Assert.assertEquals(0, dvs.size());
     }
     Assert.assertEquals(1000, rowCount);
 
@@ -211,6 +213,62 @@ public class NativeDatasetTest {
     }
     itr.close();
     allocator.close();
+  }
+
+  @Test
+  public void testScannerWithCustomMemoryReservation() throws Exception {
+    final AtomicLong reserved = new AtomicLong(0L);
+    NativeMemoryReservation.setGlobal(new NativeMemoryReservation() {
+      @Override
+      public void reserve(long size) {
+        reserved.getAndAdd(size);
+      }
+
+      @Override
+      public void unreserve(long size) {
+        reserved.getAndAdd(-size);
+      }
+    });
+    long resBefore = reserved.get();
+    String path = sampleParquet();
+    RootAllocator allocator = new RootAllocator(Long.MAX_VALUE);
+    NativeDatasetFactory factory = new SingleFileDatasetFactory(
+        allocator, FileFormat.PARQUET, FileSystem.LOCAL,
+        path);
+    Schema schema = factory.inspect();
+    NativeDataset dataset = factory.finish(schema);
+    ScanOptions scanOptions = new ScanOptions(new String[]{"id", "title"}, Filter.EMPTY, 100);
+    Scanner scanner = dataset.newScan(scanOptions);
+    List<? extends ScanTask> scanTasks = collect(scanner.scan());
+    Assert.assertEquals(1, scanTasks.size());
+
+    ScanTask scanTask = scanTasks.get(0);
+    ScanTask.Itr itr = scanTask.scan();
+    int vsrCount = 0;
+    VectorSchemaRoot vsr = null;
+    while (itr.hasNext()) {
+      // FIXME VectorSchemaRoot is not actually something ITERABLE.// Using a reader convention instead.
+      vsrCount++;
+      vsr = itr.next().valueVectors;
+      Assert.assertEquals(100, vsr.getRowCount());
+
+      // check if projector is applied
+      Assert.assertEquals("Schema<id: Int(32, true), title: Utf8>",
+          vsr.getSchema().toString());
+    }
+    Assert.assertEquals(10, vsrCount);
+
+    long res = reserved.get();
+
+    if (vsr != null) {
+      vsr.close();
+    }
+    itr.close();
+    allocator.close();
+
+    long resAfter = reserved.get();
+    Assert.assertNotEquals(res, resBefore);
+    Assert.assertEquals(res - resBefore, res - resAfter);
   }
 
   // TODO fix for empty projector. Currently empty projector is treated as projection on all available columns.

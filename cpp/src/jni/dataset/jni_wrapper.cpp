@@ -32,6 +32,7 @@
 
 #include "org_apache_arrow_dataset_file_JniWrapper.h"
 #include "org_apache_arrow_dataset_jni_JniWrapper.h"
+#include "org_apache_arrow_memory_NativeMemoryReservation.h"
 
 static jclass illegal_access_exception_class;
 static jclass illegal_argument_exception_class;
@@ -41,11 +42,19 @@ static jclass record_batch_handle_class;
 static jclass record_batch_handle_field_class;
 static jclass record_batch_handle_buffer_class;
 static jclass dictionary_batch_handle_class;
+static jclass native_memory_reservation_class;
+static jclass native_direct_memory_reservation_class;
 
 static jmethodID record_batch_handle_constructor;
 static jmethodID record_batch_handle_field_constructor;
 static jmethodID record_batch_handle_buffer_constructor;
 static jmethodID dictionary_batch_handle_constructor;
+static jmethodID reserve__memory_method;
+static jmethodID unreserve__memory_method;
+
+static jobject memory_reservation_instance;
+
+static arrow::MemoryPool* memory_pool;
 
 static jint JNI_VERSION = JNI_VERSION_1_6;
 
@@ -97,6 +106,47 @@ jmethodID GetMethodID(JNIEnv* env, jclass this_class, const char* name, const ch
   return ret;
 }
 
+jmethodID GetStaticMethodID(JNIEnv* env, jclass this_class,
+                                           const char* name, const char* sig) {
+  jmethodID ret = env->GetStaticMethodID(this_class, name, sig);
+  if (ret == nullptr) {
+    std::string error_message = "Unable to find static method " + std::string(name) +
+        " within signature" + std::string(sig);
+    env->ThrowNew(illegal_access_exception_class, error_message.c_str());
+  }
+  return ret;
+}
+
+class ReserveMemory : public arrow::ReservationListener {
+ public:
+  ReserveMemory(JNIEnv* env, jobject memory_reservation)
+      : env_(env), memory_reservation_(memory_reservation) {}
+
+  arrow::Status OnReservation(int64_t size) override {
+    env_->CallObjectMethod(memory_reservation_, reserve__memory_method, size);
+    if (env_->ExceptionCheck()) {
+      env_->ExceptionDescribe();
+      env_->ExceptionClear();
+      return arrow::Status::Invalid("memory reservation failed in Java");
+    }
+    return arrow::Status::OK();
+  }
+
+  arrow::Status OnRelease(int64_t size) override {
+    env_->CallObjectMethod(memory_reservation_, unreserve__memory_method, size);
+    if (env_->ExceptionCheck()) {
+      env_->ExceptionDescribe();
+      env_->ExceptionClear();
+      return arrow::Status::Invalid("memory unreservation failed in Java");
+    }
+    return arrow::Status::OK();
+  }
+
+ private:
+  JNIEnv* env_;
+  jobject memory_reservation_;
+};
+
 jint JNI_OnLoad(JavaVM* vm, void* reserved) {
   JNIEnv* env;
   if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION) != JNI_OK) {
@@ -117,6 +167,15 @@ jint JNI_OnLoad(JavaVM* vm, void* reserved) {
   record_batch_handle_buffer_class = CreateGlobalClassReference(
       env, "Lorg/apache/arrow/dataset/jni/NativeRecordBatchHandle$Buffer;");
 
+  native_memory_reservation_class =
+      CreateGlobalClassReference(env,
+                                 "Lorg/apache/arrow/"
+                                 "memory/NativeMemoryReservation;");
+  native_direct_memory_reservation_class =
+      CreateGlobalClassReference(env,
+                                 "Lorg/apache/arrow/"
+                                 "memory/NativeDirectMemoryReservation;");
+
   record_batch_handle_constructor =
       GetMethodID(env, record_batch_handle_class, "<init>",
                   "(J[Lorg/apache/arrow/dataset/jni/NativeRecordBatchHandle$Field;"
@@ -135,6 +194,22 @@ jint JNI_OnLoad(JavaVM* vm, void* reserved) {
   record_batch_handle_buffer_constructor =
       GetMethodID(env, record_batch_handle_buffer_class, "<init>", "(JJJJ)V");
 
+  reserve__memory_method =
+      GetMethodID(env, native_memory_reservation_class, "reserve", "(J)V");
+  unreserve__memory_method =
+      GetMethodID(env, native_memory_reservation_class, "unreserve", "(J)V");
+
+  jmethodID get_direct_reservation_instance =
+      GetStaticMethodID(env, native_direct_memory_reservation_class, "instance",
+                        "()Lorg/apache/arrow/memory/NativeDirectMemoryReservation;");
+  jobject direct_memory_reservation_local = env->CallStaticObjectMethod(
+      native_direct_memory_reservation_class, get_direct_reservation_instance);
+  memory_reservation_instance = env->NewGlobalRef(direct_memory_reservation_local);
+  env->DeleteLocalRef(direct_memory_reservation_local);
+  std::shared_ptr<arrow::ReservationListener> listener =
+      std::make_shared<ReserveMemory>(env, memory_reservation_instance);
+  memory_pool =
+      new arrow::ReservationListenableMemoryPool(arrow::default_memory_pool(), listener);
   env->ExceptionDescribe();
 
   return JNI_VERSION;
@@ -150,6 +225,10 @@ void JNI_OnUnload(JavaVM* vm, void* reserved) {
   env->DeleteGlobalRef(record_batch_handle_field_class);
   env->DeleteGlobalRef(record_batch_handle_buffer_class);
   env->DeleteGlobalRef(dictionary_batch_handle_class);
+  env->DeleteGlobalRef(native_memory_reservation_class);
+  env->DeleteGlobalRef(native_direct_memory_reservation_class);
+  env->DeleteGlobalRef(memory_reservation_instance);
+  delete memory_pool;
 
   dataset_factory_holder_.Clear();
   dataset_holder_.Clear();
@@ -267,6 +346,22 @@ std::shared_ptr<arrow::Schema> FromSchemaByteArray(JNIEnv* env, jbyteArray schem
                       arrow::ipc::ReadSchema(&buf_reader, &in_memo))
   env->ReleaseByteArrayElements(schemaBytes, schemaBytes_data, JNI_ABORT);
   return schema;
+}
+
+/*
+ * Class:     org_apache_arrow_memory_NativeMemoryReservation
+ * Method:    setGlobal
+ * Signature: (Lorg/apache/arrow/memory/NativeMemoryReservation;)V
+ */
+JNIEXPORT void JNICALL Java_org_apache_arrow_memory_NativeMemoryReservation_setGlobal(
+    JNIEnv* env, jclass, jobject reservation) {
+  delete memory_pool;
+  env->DeleteGlobalRef(memory_reservation_instance);
+  memory_reservation_instance = env->NewGlobalRef(reservation);
+  std::shared_ptr<arrow::ReservationListener> listener =
+      std::make_shared<ReserveMemory>(env, memory_reservation_instance);
+  memory_pool =
+      new arrow::ReservationListenableMemoryPool(arrow::default_memory_pool(), listener);
 }
 
 bool ParseProtobuf(uint8_t* buf, int bufLen, google::protobuf::Message* msg) {
@@ -438,9 +533,10 @@ JNIEXPORT jlong JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_createScann
     jlong batch_size) {
   std::shared_ptr<arrow::dataset::ScanContext> context =
       std::make_shared<arrow::dataset::ScanContext>();
+  context->pool = memory_pool;
   std::shared_ptr<arrow::dataset::Dataset> dataset = dataset_holder_.Lookup(dataset_id);
   JNI_ASSIGN_OR_THROW(std::shared_ptr<arrow::dataset::ScannerBuilder> scanner_builder,
-                      dataset->NewScan())
+                      dataset->NewScan(context))
 
   std::vector<std::string> column_vector = ToStringVector(env, columns);
   JNI_ASSERT_OK_OR_THROW(scanner_builder->Project(column_vector));

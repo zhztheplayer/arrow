@@ -41,11 +41,8 @@ public class NativeUnderlingMemory extends AllocationManager {
     this.nativeInstanceId = nativeInstanceId;
     this.address = address;
     // pre-allocate bytes on accounting allocator
-    final AllocationListener listener = accountingAllocator.getListener();
     try (final AllocationReservation reservation = accountingAllocator.newReservation()) {
-      listener.onPreAllocation(size);
       reservation.reserve(size);
-      listener.onAllocation(size);
     } catch (Exception e) {
       release0();
       throw e;
@@ -55,6 +52,15 @@ public class NativeUnderlingMemory extends AllocationManager {
   @Override
   public BufferLedger associate(BaseAllocator allocator) {
     return super.associate(allocator);
+  }
+
+  @Override
+  protected void releaseFromAllocator(BaseAllocator allocator) {
+    // Comparing to BaseAllocator#release, we are not calling listener#onRelease at here
+    // since we never retained bytes from the listener.
+    long size = getSize();
+    allocator.releaseBytes(size);
+    release0();
   }
 
   @Override
