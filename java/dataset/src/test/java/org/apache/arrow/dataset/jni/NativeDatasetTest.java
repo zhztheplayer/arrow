@@ -218,7 +218,7 @@ public class NativeDatasetTest {
   @Test
   public void testScannerWithCustomMemoryReservation() throws Exception {
     final AtomicLong reserved = new AtomicLong(0L);
-    NativeMemoryReservation.setGlobal(new NativeMemoryReservation() {
+    new NativeMemoryReservation() {
       @Override
       public void reserve(long size) {
         reserved.getAndAdd(size);
@@ -228,7 +228,7 @@ public class NativeDatasetTest {
       public void unreserve(long size) {
         reserved.getAndAdd(-size);
       }
-    });
+    }.load();
     long resBefore = reserved.get();
     String path = sampleParquet();
     RootAllocator allocator = new RootAllocator(Long.MAX_VALUE);

@@ -15,6 +15,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
+#include <mutex>
+
 #include <arrow/dataset/api.h>
 #include <arrow/dataset/file_base.h>
 #include <arrow/filesystem/hdfs.h>
@@ -52,6 +54,8 @@ static jmethodID dictionary_batch_handle_constructor;
 static jmethodID reserve__memory_method;
 static jmethodID unreserve__memory_method;
 
+static std::mutex reservation_mutex;
+
 static jobject memory_reservation_instance;
 
 static arrow::MemoryPool* memory_pool;
@@ -70,15 +74,20 @@ static ConcurrentMap<std::shared_ptr<arrow::Buffer>> buffer_holder_;
 
 #define JNI_ASSIGN_OR_THROW_NAME(x, y) ARROW_CONCAT(x, y)
 
-#define JNI_ASSIGN_OR_THROW_IMPL(t, lhs, rexpr)                           \
+#define JNI_ASSIGN_OR_THROW_IMPL(t, lhs, rexpr, fallback)                 \
   auto t = (rexpr);                                                       \
   if (!t.status().ok()) {                                                 \
     env->ThrowNew(runtime_exception_class, t.status().message().c_str()); \
   }                                                                       \
-  lhs = std::move(t).ValueOrDie();
+  lhs = std::move(t).ValueOr(fallback);
 
 #define JNI_ASSIGN_OR_THROW(lhs, rexpr) \
-  JNI_ASSIGN_OR_THROW_IMPL(JNI_ASSIGN_OR_THROW_NAME(_tmp_var, __COUNTER__), lhs, rexpr)
+  JNI_ASSIGN_OR_THROW_IMPL(JNI_ASSIGN_OR_THROW_NAME(_tmp_var, __COUNTER__), lhs, rexpr, \
+      nullptr)
+
+#define JNI_ASSIGN_OR_THROW_WITH_FALLBACK(lhs, rexpr, fallback) \
+  JNI_ASSIGN_OR_THROW_IMPL(JNI_ASSIGN_OR_THROW_NAME(_tmp_var, __COUNTER__), lhs, rexpr, \
+      fallback)
 
 #define JNI_ASSERT_OK_OR_THROW(expr)                                 \
   do {                                                               \
@@ -119,31 +128,39 @@ jmethodID GetStaticMethodID(JNIEnv* env, jclass this_class,
 
 class ReserveMemory : public arrow::ReservationListener {
  public:
-  ReserveMemory(JNIEnv* env, jobject memory_reservation)
-      : env_(env), memory_reservation_(memory_reservation) {}
+  ReserveMemory(JavaVM* vm, jobject memory_reservation)
+      : vm_(vm), memory_reservation_(memory_reservation) {}
 
   arrow::Status OnReservation(int64_t size) override {
-    env_->CallObjectMethod(memory_reservation_, reserve__memory_method, size);
-    if (env_->ExceptionCheck()) {
-      env_->ExceptionDescribe();
-      env_->ExceptionClear();
-      return arrow::Status::Invalid("memory reservation failed in Java");
+    JNIEnv* env;
+    if (vm_->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION) != JNI_OK) {
+      return arrow::Status::Invalid("JNIEnv was not attached to current thread");
+    }
+    env->CallObjectMethod(memory_reservation_, reserve__memory_method, size);
+    if (env->ExceptionCheck()) {
+      env->ExceptionDescribe();
+      env->ExceptionClear();
+      return arrow::Status::Invalid("Memory reservation failed in Java");
     }
     return arrow::Status::OK();
   }
 
   arrow::Status OnRelease(int64_t size) override {
-    env_->CallObjectMethod(memory_reservation_, unreserve__memory_method, size);
-    if (env_->ExceptionCheck()) {
-      env_->ExceptionDescribe();
-      env_->ExceptionClear();
-      return arrow::Status::Invalid("memory unreservation failed in Java");
+    JNIEnv* env;
+    if (vm_->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION) != JNI_OK) {
+      return arrow::Status::Invalid("JNIEnv was not attached to current thread");
+    }
+    env->CallObjectMethod(memory_reservation_, unreserve__memory_method, size);
+    if (env->ExceptionCheck()) {
+      env->ExceptionDescribe();
+      env->ExceptionClear();
+      return arrow::Status::Invalid("Memory unreservation failed in Java");
     }
     return arrow::Status::OK();
   }
 
  private:
-  JNIEnv* env_;
+  JavaVM* vm_;
   jobject memory_reservation_;
 };
 
@@ -207,7 +224,7 @@ jint JNI_OnLoad(JavaVM* vm, void* reserved) {
   memory_reservation_instance = env->NewGlobalRef(direct_memory_reservation_local);
   env->DeleteLocalRef(direct_memory_reservation_local);
   std::shared_ptr<arrow::ReservationListener> listener =
-      std::make_shared<ReserveMemory>(env, memory_reservation_instance);
+      std::make_shared<ReserveMemory>(vm, memory_reservation_instance);
   memory_pool =
       new arrow::ReservationListenableMemoryPool(arrow::default_memory_pool(), listener);
   env->ExceptionDescribe();
@@ -350,16 +367,22 @@ std::shared_ptr<arrow::Schema> FromSchemaByteArray(JNIEnv* env, jbyteArray schem
 
 /*
  * Class:     org_apache_arrow_memory_NativeMemoryReservation
- * Method:    setGlobal
- * Signature: (Lorg/apache/arrow/memory/NativeMemoryReservation;)V
+ * Method:    load
+ * Signature: ()V
  */
-JNIEXPORT void JNICALL Java_org_apache_arrow_memory_NativeMemoryReservation_setGlobal(
-    JNIEnv* env, jclass, jobject reservation) {
+JNIEXPORT void JNICALL Java_org_apache_arrow_memory_NativeMemoryReservation_load(
+    JNIEnv* env, jobject reservation) {
+  std::lock_guard<std::mutex> lock(reservation_mutex);
   delete memory_pool;
   env->DeleteGlobalRef(memory_reservation_instance);
   memory_reservation_instance = env->NewGlobalRef(reservation);
+  JavaVM* vm;
+  if (env->GetJavaVM(&vm) != JNI_OK) {
+    env->ThrowNew(runtime_exception_class, "Unable to get JavaVM instance");
+    return;
+  }
   std::shared_ptr<arrow::ReservationListener> listener =
-      std::make_shared<ReserveMemory>(env, memory_reservation_instance);
+      std::make_shared<ReserveMemory>(vm, memory_reservation_instance);
   memory_pool =
       new arrow::ReservationListenableMemoryPool(arrow::default_memory_pool(), listener);
 }
@@ -581,7 +604,9 @@ JNIEXPORT jlongArray JNICALL
 Java_org_apache_arrow_dataset_jni_JniWrapper_getScanTasksFromScanner(JNIEnv* env, jobject,
                                                                      jlong scanner_id) {
   std::shared_ptr<arrow::dataset::Scanner> scanner = scanner_holder_.Lookup(scanner_id);
-  JNI_ASSIGN_OR_THROW(arrow::dataset::ScanTaskIterator itr, scanner->ScanWithWeakFilter())
+  JNI_ASSIGN_OR_THROW_WITH_FALLBACK(arrow::dataset::ScanTaskIterator itr,
+      scanner->ScanWithWeakFilter(),
+      arrow::MakeEmptyIterator<std::shared_ptr<arrow::dataset::ScanTask>>())
   std::vector<std::shared_ptr<arrow::dataset::ScanTask>> vector =
       collect(env, std::move(itr));
   jlongArray ret = env->NewLongArray(vector.size());
@@ -622,8 +647,9 @@ JNIEXPORT jlong JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_scan(
     JNIEnv* env, jobject, jlong scan_task_id) {
   std::shared_ptr<arrow::dataset::ScanTask> scan_task =
       scan_task_holder_.Lookup(scan_task_id);
-  JNI_ASSIGN_OR_THROW(arrow::RecordBatchIterator record_batch_iterator,
-                      scan_task->Execute())
+  JNI_ASSIGN_OR_THROW_WITH_FALLBACK(arrow::RecordBatchIterator record_batch_iterator,
+      scan_task->Execute(),
+      arrow::MakeEmptyIterator<std::shared_ptr<arrow::RecordBatch>>())
   return iterator_holder_.Insert(std::make_shared<arrow::RecordBatchIterator>(
       std::move(record_batch_iterator)));  // move and propagate
 }
