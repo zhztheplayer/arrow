@@ -32,6 +32,9 @@ public class NativeDatasetFactory implements DatasetFactory, AutoCloseable {
   private final long dataSourceDiscoveryId;
   private final BufferAllocator allocator;
 
+  /**
+   * Constructor.
+   */
   public NativeDatasetFactory(BufferAllocator allocator, NativeMemoryPool memoryPool, long dataSourceDiscoveryId) {
     this.allocator = allocator;
     this.memoryPool = memoryPool;

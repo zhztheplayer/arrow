@@ -26,7 +26,8 @@ import org.apache.arrow.memory.BufferAllocator;
  */
 public class SingleFileDatasetFactory extends NativeDatasetFactory {
 
-  public SingleFileDatasetFactory(BufferAllocator allocator, NativeMemoryPool memoryPool, FileFormat format, FileSystem fs, String path) {
+  public SingleFileDatasetFactory(BufferAllocator allocator, NativeMemoryPool memoryPool, FileFormat format,
+                                  FileSystem fs, String path) {
     super(allocator, memoryPool, createNative(format, fs, path));
   }
 

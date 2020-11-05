@@ -51,8 +51,8 @@ static jmethodID record_batch_handle_constructor;
 static jmethodID record_batch_handle_field_constructor;
 static jmethodID record_batch_handle_buffer_constructor;
 static jmethodID dictionary_batch_handle_constructor;
-static jmethodID reserve__memory_method;
-static jmethodID unreserve__memory_method;
+static jmethodID reserve_memory_method;
+static jmethodID unreserve_memory_method;
 
 static jint JNI_VERSION = JNI_VERSION_1_6;
 
@@ -67,7 +67,7 @@ static ConcurrentMap<std::shared_ptr<arrow::RecordBatchIterator>> iterator_holde
 static ConcurrentMap<std::shared_ptr<arrow::Buffer>> buffer_holder_;
 static ConcurrentMap<arrow::MemoryPool*> memory_pool_holder;
 
-static long default_memory_pool_id;
+static int64_t default_memory_pool_id;
 
 #define JNI_ASSIGN_OR_THROW_NAME(x, y) ARROW_CONCAT(x, y)
 
@@ -133,7 +133,7 @@ class ReserveMemory : public arrow::ReservationListener {
     if (vm_->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION) != JNI_OK) {
       return arrow::Status::Invalid("JNIEnv was not attached to current thread");
     }
-    env->CallObjectMethod(memory_reservation_, reserve__memory_method, size);
+    env->CallObjectMethod(memory_reservation_, reserve_memory_method, size);
     if (env->ExceptionCheck()) {
       env->ExceptionDescribe();
       env->ExceptionClear();
@@ -147,7 +147,7 @@ class ReserveMemory : public arrow::ReservationListener {
     if (vm_->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION) != JNI_OK) {
       return arrow::Status::Invalid("JNIEnv was not attached to current thread");
     }
-    env->CallObjectMethod(memory_reservation_, unreserve__memory_method, size);
+    env->CallObjectMethod(memory_reservation_, unreserve_memory_method, size);
     if (env->ExceptionCheck()) {
       env->ExceptionDescribe();
       env->ExceptionClear();
@@ -212,9 +212,9 @@ jint JNI_OnLoad(JavaVM* vm, void* reserved) {
   record_batch_handle_buffer_constructor =
       GetMethodID(env, record_batch_handle_buffer_class, "<init>", "(JJJJ)V");
 
-  reserve__memory_method =
+  reserve_memory_method =
       GetMethodID(env, native_memory_reservation_class, "reserve", "(J)V");
-  unreserve__memory_method =
+  unreserve_memory_method =
       GetMethodID(env, native_memory_reservation_class, "unreserve", "(J)V");
 
   default_memory_pool_id = memory_pool_holder.Insert(arrow::default_memory_pool());

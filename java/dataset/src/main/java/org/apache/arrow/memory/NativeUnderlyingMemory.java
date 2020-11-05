@@ -22,7 +22,7 @@ import org.apache.arrow.dataset.jni.JniWrapper;
 /**
  * AllocationManager implementation for Native allocated memory.
  */
-public class NativeUnderlingMemory extends AllocationManager {
+public class NativeUnderlyingMemory extends AllocationManager {
 
   private final int size;
   private final long nativeInstanceId;
@@ -35,7 +35,7 @@ public class NativeUnderlingMemory extends AllocationManager {
    * @param size Size of underling memory (in bytes)
    * @param nativeInstanceId ID of the native instance
    */
-  public NativeUnderlingMemory(BaseAllocator accountingAllocator, int size, long nativeInstanceId, long address) {
+  public NativeUnderlyingMemory(BaseAllocator accountingAllocator, int size, long nativeInstanceId, long address) {
     super(accountingAllocator);
     this.size = size;
     this.nativeInstanceId = nativeInstanceId;

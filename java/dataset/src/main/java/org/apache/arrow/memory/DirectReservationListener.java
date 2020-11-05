@@ -28,7 +28,7 @@ import org.apache.arrow.util.VisibleForTesting;
  * pool implementation. This makes memory allocated by the pool to be controlled by JVM option
  * "-XX:MaxDirectMemorySize".
  */
-public class DirectReservationListener extends ReservationListener {
+public class DirectReservationListener implements ReservationListener {
   private final Method methodReserve;
   private final Method methodUnreserve;
 

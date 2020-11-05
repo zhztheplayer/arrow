@@ -18,7 +18,6 @@
 package org.apache.arrow.dataset.scanner;
 
 import org.apache.arrow.dataset.filter.Filter;
-import org.apache.arrow.memory.ReservationListener;
 
 /**
  * Options used during scanning.

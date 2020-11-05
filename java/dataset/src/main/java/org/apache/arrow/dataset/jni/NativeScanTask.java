@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
 import org.apache.arrow.dataset.scanner.ScanTask;
 import org.apache.arrow.memory.BaseAllocator;
 import org.apache.arrow.memory.BufferLedger;
-import org.apache.arrow.memory.NativeUnderlingMemory;
+import org.apache.arrow.memory.NativeUnderlyingMemory;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.ipc.message.ArrowDictionaryBatch;
 import org.apache.arrow.vector.ipc.message.ArrowFieldNode;
@@ -135,7 +135,7 @@ public class NativeScanTask implements ScanTask, AutoCloseable {
       final ArrayList<ArrowBuf> buffers = new ArrayList<>();
       for (NativeRecordBatchHandle.Buffer buffer : handle.getBuffers()) {
         final BaseAllocator allocator = context.getAllocator();
-        final NativeUnderlingMemory am = new NativeUnderlingMemory(allocator,
+        final NativeUnderlyingMemory am = new NativeUnderlyingMemory(allocator,
             (int) buffer.size, buffer.nativeInstanceId, buffer.memoryAddress);
         final BufferLedger ledger = am.associate(allocator);
         ArrowBuf buf = new ArrowBuf(ledger, null, (int) buffer.size, buffer.memoryAddress, false);

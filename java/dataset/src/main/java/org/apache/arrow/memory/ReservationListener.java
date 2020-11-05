@@ -17,22 +17,20 @@
 
 package org.apache.arrow.memory;
 
-import org.apache.arrow.dataset.jni.JniLoader;
-
 /**
  * Abstract class for buffer memory reservation. Used by native datasets.
  */
-public abstract class ReservationListener {
+public interface ReservationListener {
 
   /**
    * Reserve bytes.
    *
    * @throws RuntimeException if request size cannot be granted
    */
-  public abstract void reserve(long size);
+  void reserve(long size);
 
   /**
    * Unreserve bytes.
    */
-  public abstract void unreserve(long size);
+  void unreserve(long size);
 }

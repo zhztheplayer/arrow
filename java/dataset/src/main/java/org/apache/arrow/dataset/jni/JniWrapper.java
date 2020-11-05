@@ -17,8 +17,6 @@
 
 package org.apache.arrow.dataset.jni;
 
-import org.apache.arrow.memory.ReservationListener;
-
 /**
  * JNI wrapper for Datasets API's native implementation.
  */
