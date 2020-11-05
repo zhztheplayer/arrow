@@ -18,6 +18,7 @@
 package org.apache.arrow.dataset.file;
 
 import org.apache.arrow.dataset.jni.NativeDatasetFactory;
+import org.apache.arrow.dataset.jni.NativeMemoryPool;
 import org.apache.arrow.memory.BufferAllocator;
 
 /**
@@ -25,8 +26,8 @@ import org.apache.arrow.memory.BufferAllocator;
  */
 public class SingleFileDatasetFactory extends NativeDatasetFactory {
 
-  public SingleFileDatasetFactory(BufferAllocator allocator, FileFormat format, FileSystem fs, String path) {
-    super(allocator, createNative(format, fs, path));
+  public SingleFileDatasetFactory(BufferAllocator allocator, NativeMemoryPool memoryPool, FileFormat format, FileSystem fs, String path) {
+    super(allocator, memoryPool, createNative(format, fs, path));
   }
 
   private static long createNative(FileFormat format, FileSystem fs, String path) {

@@ -34,7 +34,7 @@
 
 #include "org_apache_arrow_dataset_file_JniWrapper.h"
 #include "org_apache_arrow_dataset_jni_JniWrapper.h"
-#include "org_apache_arrow_memory_NativeMemoryReservation.h"
+#include "org_apache_arrow_dataset_jni_NativeMemoryPool.h"
 
 static jclass illegal_access_exception_class;
 static jclass illegal_argument_exception_class;
@@ -54,12 +54,6 @@ static jmethodID dictionary_batch_handle_constructor;
 static jmethodID reserve__memory_method;
 static jmethodID unreserve__memory_method;
 
-static std::mutex reservation_mutex;
-
-static jobject memory_reservation_instance;
-
-static arrow::MemoryPool* memory_pool;
-
 static jint JNI_VERSION = JNI_VERSION_1_6;
 
 using arrow::jni::ConcurrentMap;
@@ -71,6 +65,9 @@ static ConcurrentMap<std::shared_ptr<arrow::dataset::ScanTask>> scan_task_holder
 static ConcurrentMap<std::shared_ptr<arrow::dataset::Scanner>> scanner_holder_;
 static ConcurrentMap<std::shared_ptr<arrow::RecordBatchIterator>> iterator_holder_;
 static ConcurrentMap<std::shared_ptr<arrow::Buffer>> buffer_holder_;
+static ConcurrentMap<arrow::MemoryPool*> memory_pool_holder;
+
+static long default_memory_pool_id;
 
 #define JNI_ASSIGN_OR_THROW_NAME(x, y) ARROW_CONCAT(x, y)
 
@@ -159,6 +156,10 @@ class ReserveMemory : public arrow::ReservationListener {
     return arrow::Status::OK();
   }
 
+  jobject GetMemoryReservation() {
+    return memory_reservation_;
+  }
+
  private:
   JavaVM* vm_;
   jobject memory_reservation_;
@@ -187,11 +188,11 @@ jint JNI_OnLoad(JavaVM* vm, void* reserved) {
   native_memory_reservation_class =
       CreateGlobalClassReference(env,
                                  "Lorg/apache/arrow/"
-                                 "memory/NativeMemoryReservation;");
+                                 "memory/ReservationListener;");
   native_direct_memory_reservation_class =
       CreateGlobalClassReference(env,
                                  "Lorg/apache/arrow/"
-                                 "memory/NativeDirectMemoryReservation;");
+                                 "memory/DirectReservationListener;");
 
   record_batch_handle_constructor =
       GetMethodID(env, record_batch_handle_class, "<init>",
@@ -216,17 +217,8 @@ jint JNI_OnLoad(JavaVM* vm, void* reserved) {
   unreserve__memory_method =
       GetMethodID(env, native_memory_reservation_class, "unreserve", "(J)V");
 
-  jmethodID get_direct_reservation_instance =
-      GetStaticMethodID(env, native_direct_memory_reservation_class, "instance",
-                        "()Lorg/apache/arrow/memory/NativeDirectMemoryReservation;");
-  jobject direct_memory_reservation_local = env->CallStaticObjectMethod(
-      native_direct_memory_reservation_class, get_direct_reservation_instance);
-  memory_reservation_instance = env->NewGlobalRef(direct_memory_reservation_local);
-  env->DeleteLocalRef(direct_memory_reservation_local);
-  std::shared_ptr<arrow::ReservationListener> listener =
-      std::make_shared<ReserveMemory>(vm, memory_reservation_instance);
-  memory_pool =
-      new arrow::ReservationListenableMemoryPool(arrow::default_memory_pool(), listener);
+  default_memory_pool_id = memory_pool_holder.Insert(arrow::default_memory_pool());
+
   env->ExceptionDescribe();
 
   return JNI_VERSION;
@@ -244,8 +236,6 @@ void JNI_OnUnload(JavaVM* vm, void* reserved) {
   env->DeleteGlobalRef(dictionary_batch_handle_class);
   env->DeleteGlobalRef(native_memory_reservation_class);
   env->DeleteGlobalRef(native_direct_memory_reservation_class);
-  env->DeleteGlobalRef(memory_reservation_instance);
-  delete memory_pool;
 
   dataset_factory_holder_.Clear();
   dataset_holder_.Clear();
@@ -253,6 +243,9 @@ void JNI_OnUnload(JavaVM* vm, void* reserved) {
   scanner_holder_.Clear();
   iterator_holder_.Clear();
   buffer_holder_.Clear();
+  memory_pool_holder.Clear();
+
+  default_memory_pool_id = -1L;
 }
 
 std::shared_ptr<arrow::Schema> SchemaFromColumnNames(
@@ -335,6 +328,58 @@ jobjectArray makeObjectArray(JNIEnv* env, jclass clazz, std::vector<jobject> arg
   return oa;
 }
 
+/*
+ * Class:     org_apache_arrow_dataset_jni_NativeMemoryPool
+ * Method:    getDefaultMemoryPool
+ * Signature: ()J
+ */
+JNIEXPORT jlong JNICALL Java_org_apache_arrow_dataset_jni_NativeMemoryPool_getDefaultMemoryPool
+    (JNIEnv *, jclass) {
+  return default_memory_pool_id;
+}
+
+/*
+ * Class:     org_apache_arrow_dataset_jni_NativeMemoryPool
+ * Method:    createListenableMemoryPool
+ * Signature: (Lorg/apache/arrow/memory/ReservationListener;)J
+ */
+JNIEXPORT jlong JNICALL Java_org_apache_arrow_dataset_jni_NativeMemoryPool_createListenableMemoryPool
+    (JNIEnv* env, jclass, jobject jlistener) {
+  jobject jlistener_ref = env->NewGlobalRef(jlistener);
+  JavaVM* vm;
+  if (env->GetJavaVM(&vm) != JNI_OK) {
+    env->ThrowNew(runtime_exception_class, "Unable to get JavaVM instance");
+    return -1;
+  }
+  std::shared_ptr<arrow::ReservationListener> listener =
+      std::make_shared<ReserveMemory>(vm, jlistener_ref);
+  auto memory_pool =
+      new arrow::ReservationListenableMemoryPool(arrow::default_memory_pool(), listener);
+  return memory_pool_holder.Insert(memory_pool);
+}
+
+/*
+ * Class:     org_apache_arrow_dataset_jni_NativeMemoryPool
+ * Method:    releaseMemoryPool
+ * Signature: (J)V
+ */
+JNIEXPORT void JNICALL Java_org_apache_arrow_dataset_jni_NativeMemoryPool_releaseMemoryPool
+    (JNIEnv* env, jclass, jlong memory_pool_id) {
+  arrow::ReservationListenableMemoryPool* pool =
+      dynamic_cast<arrow::ReservationListenableMemoryPool*>(
+          memory_pool_holder.Lookup(memory_pool_id));
+  if (pool == nullptr) {
+    return;
+  }
+  std::shared_ptr<ReserveMemory> rm =
+      std::dynamic_pointer_cast<ReserveMemory>(pool->get_listener());
+  if (rm == nullptr) {
+    return;
+  }
+  env->DeleteGlobalRef(rm->GetMemoryReservation());
+  memory_pool_holder.Erase(memory_pool_id);
+}
+
 // FIXME: COPIED FROM intel/master on which this branch is not rebased yet
 // FIXME:
 // https://github.com/Intel-bigdata/arrow/blob/02502a4eb59834c2471dd629e77dbeed19559f68/cpp/src/jni/jni_common.h#L239-L254
@@ -363,28 +408,6 @@ std::shared_ptr<arrow::Schema> FromSchemaByteArray(JNIEnv* env, jbyteArray schem
                       arrow::ipc::ReadSchema(&buf_reader, &in_memo))
   env->ReleaseByteArrayElements(schemaBytes, schemaBytes_data, JNI_ABORT);
   return schema;
-}
-
-/*
- * Class:     org_apache_arrow_memory_NativeMemoryReservation
- * Method:    load
- * Signature: ()V
- */
-JNIEXPORT void JNICALL Java_org_apache_arrow_memory_NativeMemoryReservation_load(
-    JNIEnv* env, jobject reservation) {
-  std::lock_guard<std::mutex> lock(reservation_mutex);
-  delete memory_pool;
-  env->DeleteGlobalRef(memory_reservation_instance);
-  memory_reservation_instance = env->NewGlobalRef(reservation);
-  JavaVM* vm;
-  if (env->GetJavaVM(&vm) != JNI_OK) {
-    env->ThrowNew(runtime_exception_class, "Unable to get JavaVM instance");
-    return;
-  }
-  std::shared_ptr<arrow::ReservationListener> listener =
-      std::make_shared<ReserveMemory>(vm, memory_reservation_instance);
-  memory_pool =
-      new arrow::ReservationListenableMemoryPool(arrow::default_memory_pool(), listener);
 }
 
 bool ParseProtobuf(uint8_t* buf, int bufLen, google::protobuf::Message* msg) {
@@ -549,14 +572,20 @@ Java_org_apache_arrow_dataset_jni_JniWrapper_closeDataset(JNIEnv*, jobject, jlon
 /*
  * Class:     org_apache_arrow_dataset_jni_JniWrapper
  * Method:    createScanner
- * Signature: (J[Ljava/lang/String;[BJ)J
+ * Signature: (J[Ljava/lang/String;[BJJ)J
  */
 JNIEXPORT jlong JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_createScanner(
     JNIEnv* env, jobject, jlong dataset_id, jobjectArray columns, jbyteArray filter,
-    jlong batch_size) {
+    jlong batch_size, jlong memory_pool_id) {
   std::shared_ptr<arrow::dataset::ScanContext> context =
       std::make_shared<arrow::dataset::ScanContext>();
-  context->pool = memory_pool;
+  arrow::MemoryPool* pool = memory_pool_holder.Lookup(memory_pool_id);
+  if (pool == nullptr) {
+    env->ThrowNew(runtime_exception_class,
+        "Memory pool does not exist or has been closed");
+    return -1;
+  }
+  context->pool = pool;
   std::shared_ptr<arrow::dataset::Dataset> dataset = dataset_holder_.Lookup(dataset_id);
   JNI_ASSIGN_OR_THROW(std::shared_ptr<arrow::dataset::ScannerBuilder> scanner_builder,
                       dataset->NewScan(context))

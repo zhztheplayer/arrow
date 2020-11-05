@@ -43,7 +43,7 @@ public class NativeDataset implements Dataset, AutoCloseable {
   @Override
   public NativeScanner newScan(ScanOptions options) {
     long scannerId = JniWrapper.get().createScanner(datasetId, options.getColumns(),
-        options.getFilter().toByteArray(), options.getBatchSize());
+        options.getFilter().toByteArray(), options.getBatchSize(), context.getMemoryPool().getNativeInstanceId());
     return new NativeScanner(context, scannerId);
   }
 

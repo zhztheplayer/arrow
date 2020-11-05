@@ -22,18 +22,7 @@ import org.apache.arrow.dataset.jni.JniLoader;
 /**
  * Abstract class for buffer memory reservation. Used by native datasets.
  */
-public abstract class NativeMemoryReservation {
-
-  static {
-    JniLoader.get().ensureLoaded();
-  }
-
-  /**
-   * Set as default instance of NativeMemoryReservation. Note the instance will be globally accessible in
-   * the current process. All native based datasets will be using this instance as a call back for
-   * memory reservation.
-   */
-  public native void load();
+public abstract class ReservationListener {
 
   /**
    * Reserve bytes.

@@ -28,11 +28,11 @@ import org.apache.arrow.util.VisibleForTesting;
  * pool implementation. This makes memory allocated by the pool to be controlled by JVM option
  * "-XX:MaxDirectMemorySize".
  */
-public class NativeDirectMemoryReservation extends NativeMemoryReservation {
+public class DirectReservationListener extends ReservationListener {
   private final Method methodReserve;
   private final Method methodUnreserve;
 
-  private NativeDirectMemoryReservation() {
+  private DirectReservationListener() {
     try {
       final Class<?> classBits = Class.forName("java.nio.Bits");
       methodReserve = classBits.getDeclaredMethod("reserveMemory", long.class, int.class);
@@ -44,9 +44,9 @@ public class NativeDirectMemoryReservation extends NativeMemoryReservation {
     }
   }
 
-  private static final NativeDirectMemoryReservation INSTANCE = new NativeDirectMemoryReservation();
+  private static final DirectReservationListener INSTANCE = new DirectReservationListener();
 
-  public static NativeDirectMemoryReservation instance() {
+  public static DirectReservationListener instance() {
     return INSTANCE;
   }
 

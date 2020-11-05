@@ -628,6 +628,8 @@ class ReservationListenableMemoryPool::ReservationListenableMemoryPoolImpl {
 
   std::string backend_name() { return pool_->backend_name(); }
 
+  std::shared_ptr<ReservationListener> get_listener() { return listener_; }
+
  private:
   MemoryPool* pool_;
   std::shared_ptr<ReservationListener> listener_;
@@ -668,5 +670,10 @@ int64_t ReservationListenableMemoryPool::max_memory() const {
 std::string ReservationListenableMemoryPool::backend_name() const {
   return impl_->backend_name();
 }
+
+std::shared_ptr<ReservationListener> ReservationListenableMemoryPool::get_listener() {
+  return impl_->get_listener();
+}
+
 
 }  // namespace arrow

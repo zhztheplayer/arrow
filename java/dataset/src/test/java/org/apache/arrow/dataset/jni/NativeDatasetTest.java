@@ -39,8 +39,7 @@ import org.apache.arrow.dataset.scanner.ScanTask;
 import org.apache.arrow.dataset.scanner.Scanner;
 import org.apache.arrow.dataset.source.Dataset;
 import org.apache.arrow.dataset.source.DatasetFactory;
-import org.apache.arrow.memory.NativeDirectMemoryReservation;
-import org.apache.arrow.memory.NativeMemoryReservation;
+import org.apache.arrow.memory.ReservationListener;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.dictionary.Dictionary;
@@ -92,7 +91,7 @@ public class NativeDatasetTest {
   public void testLocalFs() {
     String path = sampleParquet();
     DatasetFactory discovery = new SingleFileDatasetFactory(
-        new RootAllocator(Long.MAX_VALUE), FileFormat.PARQUET, FileSystem.LOCAL,
+        new RootAllocator(Long.MAX_VALUE), NativeMemoryPool.getDefault(), FileFormat.PARQUET, FileSystem.LOCAL,
         path);
     testDatasetFactoryEndToEnd(discovery);
   }
@@ -101,7 +100,7 @@ public class NativeDatasetTest {
   public void testHdfsWithFileProtocol() {
     String path = "file:" + sampleParquet();
     DatasetFactory discovery = new SingleFileDatasetFactory(
-        new RootAllocator(Long.MAX_VALUE), FileFormat.PARQUET, FileSystem.HDFS,
+        new RootAllocator(Long.MAX_VALUE), NativeMemoryPool.getDefault(), FileFormat.PARQUET, FileSystem.HDFS,
         path);
     testDatasetFactoryEndToEnd(discovery);
   }
@@ -116,7 +115,7 @@ public class NativeDatasetTest {
     // Install libhdfs3: https://medium.com/@arush.xtremelife/connecting-hadoop-hdfs-with-python-267234bb68a2
     String path = "hdfs://localhost:9000/userdata1.parquet?use_hdfs3=1";
     DatasetFactory discovery = new SingleFileDatasetFactory(
-        new RootAllocator(Long.MAX_VALUE), FileFormat.PARQUET, FileSystem.HDFS,
+        new RootAllocator(Long.MAX_VALUE), NativeMemoryPool.getDefault(), FileFormat.PARQUET, FileSystem.HDFS,
         path);
     testDatasetFactoryEndToEnd(discovery);
   }
@@ -126,7 +125,7 @@ public class NativeDatasetTest {
     String path = sampleParquet();
     RootAllocator allocator = new RootAllocator(Long.MAX_VALUE);
     NativeDatasetFactory factory = new SingleFileDatasetFactory(
-        allocator, FileFormat.PARQUET, FileSystem.LOCAL,
+        allocator, NativeMemoryPool.getDefault(), FileFormat.PARQUET, FileSystem.LOCAL,
         path);
     Schema schema = factory.inspect();
     NativeDataset dataset = factory.finish(schema);
@@ -163,7 +162,7 @@ public class NativeDatasetTest {
     String path = sampleParquet();
     RootAllocator allocator = new RootAllocator(Long.MAX_VALUE);
     NativeDatasetFactory factory = new SingleFileDatasetFactory(
-        allocator, FileFormat.PARQUET, FileSystem.LOCAL,
+        allocator, NativeMemoryPool.getDefault(), FileFormat.PARQUET, FileSystem.LOCAL,
         path);
     Schema schema = factory.inspect();
     NativeDataset dataset = factory.finish(schema);
@@ -218,7 +217,7 @@ public class NativeDatasetTest {
   @Test
   public void testScannerWithCustomMemoryReservation() throws Exception {
     final AtomicLong reserved = new AtomicLong(0L);
-    new NativeMemoryReservation() {
+    final NativeMemoryPool pool = NativeMemoryPool.createListenable(new ReservationListener() {
       @Override
       public void reserve(long size) {
         reserved.getAndAdd(size);
@@ -228,12 +227,12 @@ public class NativeDatasetTest {
       public void unreserve(long size) {
         reserved.getAndAdd(-size);
       }
-    }.load();
+    });
     long resBefore = reserved.get();
     String path = sampleParquet();
     RootAllocator allocator = new RootAllocator(Long.MAX_VALUE);
     NativeDatasetFactory factory = new SingleFileDatasetFactory(
-        allocator, FileFormat.PARQUET, FileSystem.LOCAL,
+        allocator, pool, FileFormat.PARQUET, FileSystem.LOCAL,
         path);
     Schema schema = factory.inspect();
     NativeDataset dataset = factory.finish(schema);
@@ -277,7 +276,7 @@ public class NativeDatasetTest {
     String path = sampleParquet();
     RootAllocator allocator = new RootAllocator(Long.MAX_VALUE);
     NativeDatasetFactory factory = new SingleFileDatasetFactory(
-        allocator, FileFormat.PARQUET, FileSystem.LOCAL,
+        allocator, NativeMemoryPool.getDefault(), FileFormat.PARQUET, FileSystem.LOCAL,
         path);
     Schema schema = factory.inspect();
     NativeDataset dataset = factory.finish(schema);

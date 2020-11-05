@@ -179,6 +179,8 @@ class ARROW_EXPORT ReservationListenableMemoryPool : public MemoryPool {
 
   std::string backend_name() const override;
 
+  std::shared_ptr<ReservationListener> get_listener();
+
  private:
   class ReservationListenableMemoryPoolImpl;
   std::unique_ptr<ReservationListenableMemoryPoolImpl> impl_;

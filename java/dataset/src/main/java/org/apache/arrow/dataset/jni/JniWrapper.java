@@ -17,6 +17,8 @@
 
 package org.apache.arrow.dataset.jni;
 
+import org.apache.arrow.memory.ReservationListener;
+
 /**
  * JNI wrapper for Datasets API's native implementation.
  */
@@ -40,7 +42,7 @@ public class JniWrapper {
 
   public native void closeDataset(long datasetId);
 
-  public native long createScanner(long datasetId, String[] columns, byte[] filter, long batchSize);
+  public native long createScanner(long datasetId, String[] columns, byte[] filter, long batchSize, long memoryPool);
 
   public native byte[] getSchemaFromScanner(long scannerId);
 
