@@ -164,7 +164,7 @@ class ARROW_EXPORT ReservationListenableMemoryPool : public MemoryPool {
  public:
   explicit ReservationListenableMemoryPool(MemoryPool* pool,
                                            std::shared_ptr<ReservationListener> listener,
-                                           int64_t block_size = 64 * 1024);
+                                           int64_t block_size = 8 * 1024 * 1024);
   ~ReservationListenableMemoryPool() override;
 
   Status Allocate(int64_t size, uint8_t** out) override;
