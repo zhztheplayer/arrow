@@ -53,6 +53,13 @@ public interface BufferAllocator extends AutoCloseable {
   ArrowBuf buffer(long size, BufferManager manager);
 
   /**
+   * Release memory space from an AllocationManager instance.
+   *
+   * @param allocationManager the AllocationManager instance to release
+   */
+  void release(AllocationManager allocationManager);
+
+  /**
    * Returns the allocator this allocator falls back to when it needs more memory.
    *
    * @return the underlying allocator used by this allocator

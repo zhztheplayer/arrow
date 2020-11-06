@@ -28,11 +28,16 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * Native implementation of {@link DatasetFactory}.
  */
 public class NativeDatasetFactory implements DatasetFactory, AutoCloseable {
+  private final NativeMemoryPool memoryPool;
   private final long dataSourceDiscoveryId;
   private final BufferAllocator allocator;
 
-  public NativeDatasetFactory(BufferAllocator allocator, long dataSourceDiscoveryId) {
+  /**
+   * Constructor.
+   */
+  public NativeDatasetFactory(BufferAllocator allocator, NativeMemoryPool memoryPool, long dataSourceDiscoveryId) {
     this.allocator = allocator;
+    this.memoryPool = memoryPool;
     this.dataSourceDiscoveryId = dataSourceDiscoveryId;
   }
 
@@ -55,7 +60,7 @@ public class NativeDatasetFactory implements DatasetFactory, AutoCloseable {
   public NativeDataset finish(Schema schema) {
     try {
       byte[] serialized = SchemaUtils.get().serialize(schema);
-      return new NativeDataset(new NativeContext(allocator),
+      return new NativeDataset(new NativeContext(allocator, memoryPool),
           JniWrapper.get().createDataset(dataSourceDiscoveryId, serialized));
     } catch (IOException e) {
       throw new RuntimeException(e);

@@ -40,7 +40,7 @@ public class JniWrapper {
 
   public native void closeDataset(long datasetId);
 
-  public native long createScanner(long datasetId, String[] columns, byte[] filter, long batchSize);
+  public native long createScanner(long datasetId, String[] columns, byte[] filter, long batchSize, long memoryPool);
 
   public native byte[] getSchemaFromScanner(long scannerId);
 

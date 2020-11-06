@@ -26,13 +26,16 @@ import org.apache.arrow.util.Preconditions;
  */
 public class NativeContext {
   private final BufferAllocator allocator;
+  private final NativeMemoryPool memoryPool;
 
   /**
    * Constructor.
    *
    * @param allocator The allocator in use.
+   * @param memoryPool Native memory pool.
    */
-  public NativeContext(BufferAllocator allocator) {
+  public NativeContext(BufferAllocator allocator, NativeMemoryPool memoryPool) {
+    this.memoryPool = memoryPool;
     Preconditions.checkArgument(allocator instanceof BaseAllocator,
         "currently only instance of BaseAllocator supported");
     this.allocator = allocator;
@@ -43,5 +46,12 @@ public class NativeContext {
    */
   public BaseAllocator getAllocator() {
     return (BaseAllocator) allocator;
+  }
+
+  /**
+   * Returns the native memory pool.
+   */
+  public NativeMemoryPool getMemoryPool() {
+    return memoryPool;
   }
 }

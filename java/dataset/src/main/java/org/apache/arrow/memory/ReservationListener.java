@@ -15,24 +15,22 @@
  * limitations under the License.
  */
 
-package org.apache.arrow.dataset.file;
-
-import org.apache.arrow.dataset.jni.NativeDatasetFactory;
-import org.apache.arrow.dataset.jni.NativeMemoryPool;
-import org.apache.arrow.memory.BufferAllocator;
+package org.apache.arrow.memory;
 
 /**
- * Java binding of the C++ SingleFileDataSourceDiscovery.
+ * Abstract class for buffer memory reservation. Used by native datasets.
  */
-public class SingleFileDatasetFactory extends NativeDatasetFactory {
+public interface ReservationListener {
 
-  public SingleFileDatasetFactory(BufferAllocator allocator, NativeMemoryPool memoryPool, FileFormat format,
-                                  FileSystem fs, String path) {
-    super(allocator, memoryPool, createNative(format, fs, path));
-  }
+  /**
+   * Reserve bytes.
+   *
+   * @throws RuntimeException if request size cannot be granted
+   */
+  void reserve(long size);
 
-  private static long createNative(FileFormat format, FileSystem fs, String path) {
-    return JniWrapper.get().makeSingleFileDatasetFactory(path, format.id(), fs.id());
-  }
-
+  /**
+   * Unreserve bytes.
+   */
+  void unreserve(long size);
 }
