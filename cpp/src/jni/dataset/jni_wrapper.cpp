@@ -376,6 +376,7 @@ JNIEXPORT void JNICALL Java_org_apache_arrow_dataset_jni_NativeMemoryPool_releas
   if (rm == nullptr) {
     return;
   }
+  // delete pool; // fixme
   env->DeleteGlobalRef(rm->GetMemoryReservation());
   memory_pool_holder.Erase(memory_pool_id);
 }
