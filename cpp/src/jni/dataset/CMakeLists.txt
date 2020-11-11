@@ -60,7 +60,7 @@ set(PROTO_SRCS "${PROTO_OUTPUT_DIR}/DTypes.pb.cc")
 
 set(PROTO_HDRS "${PROTO_OUTPUT_DIR}/DTypes.pb.h")
 
-set(ARROW_DATASET_JNI_SOURCES jni_wrapper.cpp ${PROTO_SRCS})
+set(ARROW_DATASET_JNI_SOURCES jni_wrapper.cpp jni_memory_pool.cpp ${PROTO_SRCS})
 
 add_arrow_lib(arrow_dataset_jni
               BUILD_SHARED
@@ -80,5 +80,7 @@ add_arrow_lib(arrow_dataset_jni
               arrow_static
               arrow_dataset_java
               arrow_dataset_jni_proto)
+
+arrow_install_all_headers("jni/dataset")
 
 add_dependencies(arrow_dataset_jni ${ARROW_DATASET_JNI_LIBRARIES})
