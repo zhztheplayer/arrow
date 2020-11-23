@@ -49,7 +49,15 @@ class ARROW_DS_EXPORT FileSource {
   FileSource(std::string path, fs::FileSystem* filesystem,
              Compression::type compression = Compression::UNCOMPRESSED,
              bool writable = true)
-      : impl_(PathAndFileSystem{std::move(path), filesystem}),
+      : impl_(PathAndFileSystem{std::move(path), -1L, -1L, filesystem}),
+        compression_(compression),
+        writable_(writable) {}
+
+  FileSource(std::string path, int64_t start_offset, int64_t length,
+             fs::FileSystem* filesystem,
+             Compression::type compression = Compression::UNCOMPRESSED,
+             bool writable = true)
+      : impl_(PathAndFileSystem{std::move(path), start_offset, length, filesystem}),
         compression_(compression),
         writable_(writable) {}
 
@@ -90,6 +98,14 @@ class ARROW_DS_EXPORT FileSource {
     return type() == PATH ? util::get<PATH>(impl_).path : buffer_path;
   }
 
+  int64_t start_offset() const {
+    return type() == PATH ? util::get<PATH>(impl_).start_offset : -1L;
+  }
+
+  int64_t length() const {
+    return type() == PATH ? util::get<PATH>(impl_).length : -1L;
+  }
+
   /// \brief Return the filesystem, if any. Only non null when file
   /// source type is PATH
   fs::FileSystem* filesystem() const {
@@ -112,6 +128,8 @@ class ARROW_DS_EXPORT FileSource {
  private:
   struct PathAndFileSystem {
     std::string path;
+    int64_t start_offset;
+    int64_t length;
     fs::FileSystem* filesystem;
   };
 
@@ -130,6 +148,8 @@ class ARROW_DS_EXPORT FileFormat : public std::enable_shared_from_this<FileForma
 
   /// \brief Return true if fragments of this format can benefit from parallel scanning.
   virtual bool splittable() const { return false; }
+
+  virtual bool random_read() const { return false; }
 
   /// \brief Indicate if the FileSource is supported/readable by this format.
   virtual Result<bool> IsSupported(const FileSource& source) const = 0;

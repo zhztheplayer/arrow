@@ -235,6 +235,8 @@ class ARROW_DS_EXPORT FileSystemDatasetFactory : public DatasetFactory {
 class ARROW_DS_EXPORT SingleFileDatasetFactory : public DatasetFactory {
  public:
   static Result<std::shared_ptr<DatasetFactory>> Make(std::string path,
+                                                      int64_t start_offset,
+                                                      int64_t length,
                                                       std::shared_ptr<fs::FileSystem> fs,
                                                       std::shared_ptr<FileFormat> format);
 

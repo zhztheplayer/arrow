@@ -825,7 +825,8 @@ Java_org_apache_arrow_dataset_jni_JniWrapper_releaseBuffer(JNIEnv*, jobject, jlo
  */
 JNIEXPORT jlong JNICALL
 Java_org_apache_arrow_dataset_file_JniWrapper_makeSingleFileDatasetFactory(
-    JNIEnv* env, jobject, jstring path, jint file_format_id, jint file_system_id) {
+    JNIEnv* env, jobject, jstring path, jint file_format_id, jint file_system_id,
+    jlong start_offset, jlong length) {
   std::shared_ptr<arrow::dataset::FileFormat> file_format =
       GetFileFormat(env, file_format_id);
   std::string out_path;
@@ -833,6 +834,7 @@ Java_org_apache_arrow_dataset_file_JniWrapper_makeSingleFileDatasetFactory(
       GetFileSystem(env, file_system_id, JStringToCString(env, path), &out_path);
   JNI_ASSIGN_OR_THROW(
       std::shared_ptr<arrow::dataset::DatasetFactory> d,
-      arrow::dataset::SingleFileDatasetFactory::Make(out_path, fs, file_format))
+      arrow::dataset::SingleFileDatasetFactory::Make(out_path, start_offset, length, fs,
+          file_format))
   return dataset_factory_holder_.Insert(d);
 }

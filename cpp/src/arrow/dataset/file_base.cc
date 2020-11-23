@@ -59,6 +59,12 @@ Result<std::shared_ptr<arrow::io::OutputStream>> FileSource::OpenWritable() cons
 
 Result<std::shared_ptr<FileFragment>> FileFormat::MakeFragment(
     FileSource source, std::shared_ptr<ScanOptions> options) {
+  if (source.start_offset() != -1L || source.length() != -1L) {
+    if (!random_read()) {
+      return arrow::Status::Invalid("Random read is not support for file format " +
+          type_name());
+    }
+  }
   return MakeFragment(std::move(source), std::move(options), scalar(true));
 }
 
