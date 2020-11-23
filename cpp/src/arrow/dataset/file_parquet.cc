@@ -418,13 +418,22 @@ Result<ScanTaskIterator> ParquetFileFormat::ScanFile(
     }
   }
   if (source.start_offset() != -1L) {
-    // random read, locate to row groups start after offset bytes
+    // random read
     std::vector<int> random_read_selected_row_groups = std::vector<int>();
-    int64_t r_start = 0L;
-    int64_t r_bytes = 0L;
     for (int i : row_groups_to_scan) {
-      r_start += r_bytes;
-      r_bytes = reader->RowGroup(i)->metadata()->total_byte_size();
+      std::shared_ptr<parquet::ColumnChunkMetaData> leading_cc =
+          reader->RowGroup(i)->metadata()->ColumnChunk(0);
+      int64_t r_start = leading_cc->data_page_offset();
+      if (leading_cc->has_dictionary_page() &&
+          r_start > leading_cc->dictionary_page_offset()) {
+        r_start = leading_cc->dictionary_page_offset();
+      }
+      int64_t r_bytes = 0L;
+      for (int col_id = 0; col_id < reader->RowGroup(i)->metadata()->num_columns();
+           col_id++) {
+        r_bytes += reader->
+            RowGroup(i)->metadata()->ColumnChunk(col_id)->total_compressed_size();
+      }
       int64_t midpoint = r_start + r_bytes / 2;
       if (midpoint >= source.start_offset()
           && midpoint < (source.start_offset() + source.length())) {
