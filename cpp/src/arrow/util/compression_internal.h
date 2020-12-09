@@ -72,6 +72,9 @@ constexpr int kZSTDDefaultCompressionLevel = 1;
 std::unique_ptr<Codec> MakeZSTDCodec(
     int compression_level = kZSTDDefaultCompressionLevel);
 
+template<typename T>
+std::unique_ptr<Codec> MakeFastPForCodec();
+
 }  // namespace internal
 }  // namespace util
 }  // namespace arrow

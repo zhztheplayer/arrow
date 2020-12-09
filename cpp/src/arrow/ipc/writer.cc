@@ -203,6 +203,58 @@ class RecordBatchSerializer {
         options_.use_threads, static_cast<int>(out_->body_buffers.size()), CompressOne);
   }
 
+  Status CompressBodyBuffersByType(const std::vector<std::shared_ptr<Field>>& fields) {
+    std::unique_ptr<util::Codec> codec;
+    std::unique_ptr<util::Codec> fastpfor32_codec;
+    std::unique_ptr<util::Codec> fastpfor64_codec;
+    ARROW_ASSIGN_OR_RAISE(
+        codec, util::Codec::Create(Compression::LZ4_FRAME, options_.compression_level));
+    ARROW_ASSIGN_OR_RAISE(
+        fastpfor32_codec,
+        util::Codec::CreateInt32(Compression::FASTPFOR, options_.compression_level));
+    ARROW_ASSIGN_OR_RAISE(
+        fastpfor64_codec,
+        util::Codec::CreateInt64(Compression::FASTPFOR, options_.compression_level));
+
+    AppendCustomMetadata("ARROW:experimental_compression",
+                         util::Codec::GetCodecAsString(options_.compression));
+
+    int32_t buffer_idx = 0;
+    for (const auto& field : fields) {
+      if (field->type()->id() == Type::NA) continue;
+
+      const auto& layout_buffers = field->type()->layout().buffers;
+      for (size_t i = 0; i < layout_buffers.size(); ++i) {
+        const auto& layout = layout_buffers[i];
+        auto& buffer = out_->body_buffers[buffer_idx + i];
+        if (buffer->data()) {
+          switch (layout.kind) {
+            case DataTypeLayout::BufferKind::FIXED_WIDTH:
+              if (layout.byte_width == 4) {
+                RETURN_NOT_OK(CompressBuffer(*buffer, fastpfor32_codec.get(), &buffer));
+              } else if (layout.byte_width == 8) {
+                RETURN_NOT_OK(CompressBuffer(*buffer, fastpfor64_codec.get(), &buffer));
+              } else {
+                RETURN_NOT_OK(CompressBuffer(*buffer, codec.get(), &buffer));
+              }
+              break;
+            case DataTypeLayout::BufferKind::BITMAP:
+            case DataTypeLayout::BufferKind::VARIABLE_WIDTH:
+              RETURN_NOT_OK(CompressBuffer(*buffer, codec.get(), &buffer));
+              break;
+            case DataTypeLayout::BufferKind::ALWAYS_NULL:
+              break;
+            default:
+              return Status::Invalid("Wrong buffer layout.");
+          }
+        }
+      }
+      buffer_idx += layout_buffers.size();
+    }
+    // TODO: ParallelFor?
+    return Status::OK();
+  }
+
   Status Assemble(const RecordBatch& batch) {
     if (field_nodes_.size() > 0) {
       field_nodes_.clear();
@@ -216,7 +268,11 @@ class RecordBatchSerializer {
     }
 
     if (options_.compression != Compression::UNCOMPRESSED) {
-      RETURN_NOT_OK(CompressBodyBuffers());
+      if (options_.compression == Compression::FASTPFOR) {
+        RETURN_NOT_OK(CompressBodyBuffersByType(batch.schema()->fields()));
+      } else {
+        RETURN_NOT_OK(CompressBodyBuffers());
+      }
     }
 
     // The position for the start of a buffer relative to the passed frame of

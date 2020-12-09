@@ -58,6 +58,8 @@ std::string Codec::GetCodecAsString(Compression::type t) {
       return "ZSTD";
     case Compression::BZ2:
       return "BZ2";
+    case Compression::FASTPFOR:
+      return "FASTPFOR";
     default:
       return "UNKNOWN";
   }
@@ -82,6 +84,8 @@ Result<Compression::type> Codec::GetCompressionType(const std::string& name) {
     return Compression::ZSTD;
   } else if (name == "BZ2") {
     return Compression::BZ2;
+  } else if (name == "FASTPFOR") {
+    return Compression::FASTPFOR;
   } else {
     return Status::Invalid("Unrecognized compression type: ", name);
   }
@@ -164,6 +168,44 @@ Result<std::unique_ptr<Codec>> Codec::Create(Compression::type codec_type,
       return Status::Invalid("Unrecognized codec");
   }
 
+  RETURN_NOT_OK(codec->Init());
+  return std::move(codec);
+}
+
+Result<std::unique_ptr<Codec>> Codec::CreateInt32(Compression::type codec_type,
+                                                   int compression_level) {
+  return CreateByType<uint32_t>(codec_type, compression_level);
+}
+
+Result<std::unique_ptr<Codec>> Codec::CreateInt64(Compression::type codec_type,
+                                                  int compression_level) {
+  return CreateByType<uint64_t>(codec_type, compression_level);
+}
+
+template <typename T>
+Result<std::unique_ptr<Codec>> Codec::CreateByType(Compression::type codec_type,
+                                                   int compression_level) {
+  std::unique_ptr<Codec> codec;
+  const bool compression_level_set{compression_level != kUseDefaultCompressionLevel};
+  switch (codec_type) {
+    case Compression::UNCOMPRESSED:
+      if (compression_level_set) {
+        return Status::Invalid("Compression level cannot be specified for UNCOMPRESSED.");
+      }
+      return nullptr;
+    case Compression::FASTPFOR:
+#ifdef ARROW_WITH_FASTPFOR
+      if (compression_level_set) {
+        return Status::Invalid("LZ4 doesn't support setting a compression level.");
+      }
+      codec = internal::MakeFastPForCodec<T>();
+      break;
+#else
+      return Status::NotImplemented("FastPFor codec support not built");
+#endif
+    default:
+      return Status::Invalid("Unrecognized codec");
+  }
   RETURN_NOT_OK(codec->Init());
   return std::move(codec);
 }

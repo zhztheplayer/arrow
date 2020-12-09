@@ -30,7 +30,7 @@ namespace arrow {
 
 struct Compression {
   /// \brief Compression algorithm
-  enum type { UNCOMPRESSED, SNAPPY, GZIP, BROTLI, ZSTD, LZ4, LZ4_FRAME, LZO, BZ2 };
+  enum type { UNCOMPRESSED, SNAPPY, GZIP, BROTLI, ZSTD, LZ4, LZ4_FRAME, LZO, BZ2, FASTPFOR };
 
   static constexpr int kUseDefaultCompressionLevel = std::numeric_limits<int>::min();
 };
@@ -133,6 +133,14 @@ class ARROW_EXPORT Codec {
   static Result<std::unique_ptr<Codec>> Create(
       Compression::type codec, int compression_level = kUseDefaultCompressionLevel);
 
+  /// \brief Create a codec for the given compression algorithm for the specific type
+  static Result<std::unique_ptr<Codec>> CreateInt32(
+      Compression::type codec_type, int compression_level = kUseDefaultCompressionLevel);
+
+  /// \brief Create a codec for the given compression algorithm for the specific type
+  static Result<std::unique_ptr<Codec>> CreateInt64(
+      Compression::type codec_type, int compression_level = kUseDefaultCompressionLevel);
+
   /// \brief Return true if support for indicated codec has been enabled
   static bool IsAvailable(Compression::type codec);
 
@@ -172,6 +180,11 @@ class ARROW_EXPORT Codec {
  private:
   /// \brief Initializes the codec's resources.
   virtual Status Init();
+
+  /// \brief Create a codec for the given compression algorithm for the specific type
+  template<typename T>
+  static Result<std::unique_ptr<Codec>> CreateByType(
+      Compression::type codec_type, int compression_level = kUseDefaultCompressionLevel);
 };
 
 }  // namespace util
