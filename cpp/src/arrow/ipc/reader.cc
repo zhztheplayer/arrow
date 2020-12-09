@@ -398,10 +398,10 @@ Status DecompressBuffersByType(Compression::type compression,
       auto& buffer = arr->buffers[i];
       switch (layout.kind) {
         case DataTypeLayout::BufferKind::FIXED_WIDTH:
-          if (layout.byte_width == 4) {
+          if (layout.byte_width == 4 && field->type()->id() != Type::FLOAT) {
             RETURN_NOT_OK(DecompressBuffer(*buffer, fastpfor32_codec.get(), &buffer,
                                            options.memory_pool));
-          } else if (layout.byte_width == 8) {
+          } else if (layout.byte_width == 8 && field->type()->id() != Type::DOUBLE) {
             RETURN_NOT_OK(DecompressBuffer(*buffer, fastpfor64_codec.get(), &buffer,
                                            options.memory_pool));
           } else {
