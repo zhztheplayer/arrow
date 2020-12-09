@@ -25,6 +25,7 @@ import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 import org.apache.arrow.dataset.DatasetTypes;
@@ -54,32 +55,42 @@ public class NativeDatasetTest {
     return NativeDatasetTest.class.getResource(File.separator + "userdata1.parquet").getPath();
   }
 
-  private void testDatasetFactoryEndToEnd(DatasetFactory factory) {
+  private void testDatasetFactoryEndToEnd(DatasetFactory factory, int taskCount, int vectorCount, int rowCount) {
     Schema schema = factory.inspect();
 
-    Assert.assertEquals("Schema<registration_dttm: Timestamp(NANOSECOND, null), id: Int(32, true), " +
-        "first_name: Utf8, last_name: Utf8, email: Utf8, gender: Utf8, ip_address: Utf8, cc: Utf8, " +
-        "country: Utf8, birthdate: Utf8, salary: FloatingPoint(DOUBLE), title: Utf8, comments: Utf8>",
+    Assert.assertEquals("Schema<registration_dttm: Timestamp(NANOSECOND, null), id: Int(32, true), first_name: Utf8, " +
+            "last_name: Utf8, email: Utf8, gender: Utf8, ip_address: Utf8, cc: Utf8, country: Utf8, birthdate: Utf8, " +
+            "salary: FloatingPoint(DOUBLE), title: Utf8, comments: Utf8>(metadata: {org.apache.spark.version=3.0.0, " +
+            "org.apache.spark.sql.parquet.row.metadata={\"type\":\"struct\",\"fields\":[{\"name\":" +
+            "\"registration_dttm\",\"type\":\"timestamp\",\"nullable\":true,\"metadata\":{}}," +
+            "{\"name\":\"id\",\"type\":\"integer\",\"nullable\":true,\"metadata\":{}},{\"name\":" +
+            "\"first_name\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"last_name\"," +
+            "\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"email\",\"type\":\"string\"," +
+            "\"nullable\":true,\"metadata\":{}},{\"name\":\"gender\",\"type\":\"string\",\"nullable\":true," +
+            "\"metadata\":{}},{\"name\":\"ip_address\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}," +
+            "{\"name\":\"cc\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"country\"," +
+            "\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"birthdate\",\"type\":\"string\"," +
+            "\"nullable\":true,\"metadata\":{}},{\"name\":\"salary\",\"type\":\"double\",\"nullable\":true," +
+            "\"metadata\":{}},{\"name\":\"title\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}," +
+            "{\"name\":\"comments\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}]}})",
         schema.toString());
 
     Dataset dataset = factory.finish();
     Assert.assertNotNull(dataset);
 
-    List<? extends DataFragment> fragments = collect(
-        dataset.getFragments(new ScanOptions(new String[0], Filter.EMPTY, 100)));
-    Assert.assertEquals(1, fragments.size());
 
-    DataFragment fragment = fragments.get(0);
-    List<? extends ScanTask> scanTasks = collect(fragment.scan());
-    Assert.assertEquals(1, scanTasks.size());
+    List<? extends ScanTask> scanTasks = collect(dataset
+        .newScan(new ScanOptions(new String[0], Filter.EMPTY, 100)).scan());
+    Assert.assertEquals(taskCount, scanTasks.size());
 
-    ScanTask scanTask = scanTasks.get(0);
-    List<? extends ScanTask.ArrowBundledVectors> data = collect(scanTask.scan());
+    List<? extends ScanTask.ArrowBundledVectors> data = scanTasks.stream()
+        .flatMap(t -> StreamSupport.stream(Spliterators.spliteratorUnknownSize(t.scan(), Spliterator.ORDERED), false))
+        .collect(Collectors.toList());
     Assert.assertNotNull(data);
     // 1000 rows total in file userdata1.parquet
-    Assert.assertEquals(10, data.size());
-    VectorSchemaRoot vsr = data.get(0).valueVectors;
-    Assert.assertEquals(100, vsr.getRowCount());
+    Assert.assertEquals(vectorCount, data.size());
+    Assert.assertEquals(rowCount, data.stream()
+        .mapToInt(a -> a.valueVectors.getRowCount()).sum());
 
 
     // FIXME when using list field:
@@ -87,13 +98,30 @@ public class NativeDatasetTest {
     // FIXME as a result Java side buffer pointer gets out of bound.
   }
 
-  @Ignore
+  @Test
   public void testLocalFs() {
     String path = sampleParquet();
     DatasetFactory discovery = new SingleFileDatasetFactory(
         new RootAllocator(Long.MAX_VALUE), NativeMemoryPool.getDefault(), FileFormat.PARQUET, FileSystem.LOCAL,
         path);
-    testDatasetFactoryEndToEnd(discovery);
+    testDatasetFactoryEndToEnd(discovery, 1, 10, 1000);
+  }
+
+  @Test
+  public void testSplitFile() {
+    String path = sampleParquet();
+    DatasetFactory discovery = new SingleFileDatasetFactory(
+        new RootAllocator(Long.MAX_VALUE), NativeMemoryPool.getDefault(), FileFormat.PARQUET, FileSystem.LOCAL,
+        path, 0L, 0L);
+    testDatasetFactoryEndToEnd(discovery, 0, 0, 0);
+    discovery = new SingleFileDatasetFactory(
+        new RootAllocator(Long.MAX_VALUE), NativeMemoryPool.getDefault(), FileFormat.PARQUET, FileSystem.LOCAL,
+        path, 0L, 100000L);
+    testDatasetFactoryEndToEnd(discovery, 1, 10, 1000);
+    discovery = new SingleFileDatasetFactory(
+        new RootAllocator(Long.MAX_VALUE), NativeMemoryPool.getDefault(), FileFormat.PARQUET, FileSystem.LOCAL,
+        path, 100000L, 200000L);
+    testDatasetFactoryEndToEnd(discovery, 0, 0, 0);
   }
 
   @Ignore
@@ -102,7 +130,7 @@ public class NativeDatasetTest {
     DatasetFactory discovery = new SingleFileDatasetFactory(
         new RootAllocator(Long.MAX_VALUE), NativeMemoryPool.getDefault(), FileFormat.PARQUET, FileSystem.HDFS,
         path);
-    testDatasetFactoryEndToEnd(discovery);
+    testDatasetFactoryEndToEnd(discovery, 1, 10, 1000);
   }
 
   @Ignore
@@ -117,7 +145,7 @@ public class NativeDatasetTest {
     DatasetFactory discovery = new SingleFileDatasetFactory(
         new RootAllocator(Long.MAX_VALUE), NativeMemoryPool.getDefault(), FileFormat.PARQUET, FileSystem.HDFS,
         path);
-    testDatasetFactoryEndToEnd(discovery);
+    testDatasetFactoryEndToEnd(discovery, 1, 10, 1000);
   }
 
   @Test

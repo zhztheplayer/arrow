@@ -400,20 +400,55 @@ Result<ScanTaskIterator> ParquetFileFormat::ScanFile(
     const FileSource& source, std::shared_ptr<ScanOptions> options,
     std::shared_ptr<ScanContext> context, const std::vector<int>& row_groups) const {
   auto properties = MakeReaderProperties(*this, context->pool);
+  std::vector<int> row_groups_to_scan = std::vector<int>();
   ARROW_ASSIGN_OR_RAISE(auto reader, OpenReader(source, std::move(properties)));
-
-  for (int i : row_groups) {
+  if (row_groups.empty()) {
+    int maximum = reader->metadata()->num_row_groups();
+    for (int i = 0; i < maximum; i++) {
+      row_groups_to_scan.push_back(i);
+    }
+  } else {
+    row_groups_to_scan = row_groups;
+  }
+  for (int i : row_groups_to_scan) {
     if (i >= reader->metadata()->num_row_groups()) {
       return Status::IndexError("trying to scan row group ", i, " but ", source.path(),
                                 " only has ", reader->metadata()->num_row_groups(),
                                 " row groups");
     }
   }
-
+  if (source.start_offset() != -1L) {
+    // random read
+    std::vector<int> random_read_selected_row_groups = std::vector<int>();
+    for (int i : row_groups_to_scan) {
+      std::shared_ptr<parquet::ColumnChunkMetaData> leading_cc =
+          reader->RowGroup(i)->metadata()->ColumnChunk(0);
+      int64_t r_start = leading_cc->data_page_offset();
+      if (leading_cc->has_dictionary_page() &&
+          r_start > leading_cc->dictionary_page_offset()) {
+        r_start = leading_cc->dictionary_page_offset();
+      }
+      int64_t r_bytes = 0L;
+      for (int col_id = 0; col_id < reader->RowGroup(i)->metadata()->num_columns();
+           col_id++) {
+        r_bytes += reader->
+            RowGroup(i)->metadata()->ColumnChunk(col_id)->total_compressed_size();
+      }
+      int64_t midpoint = r_start + r_bytes / 2;
+      if (midpoint >= source.start_offset()
+          && midpoint < (source.start_offset() + source.length())) {
+        random_read_selected_row_groups.push_back(i);
+      }
+    }
+    row_groups_to_scan = random_read_selected_row_groups;
+  }
+  if (row_groups_to_scan.empty()) {
+    return arrow::MakeEmptyIterator<std::shared_ptr<ScanTask>>();
+  }
   auto arrow_properties = MakeArrowReaderProperties(*this, options->batch_size, *reader);
   return ParquetScanTaskIterator::Make(std::move(options), std::move(context),
                                        std::move(reader), std::move(arrow_properties),
-                                       row_groups);
+                                       row_groups_to_scan);
 }
 
 Result<std::shared_ptr<FileFragment>> ParquetFileFormat::MakeFragment(

@@ -34,6 +34,16 @@ public class JniWrapper {
     JniLoader.get().ensureLoaded();
   }
 
-  public native long makeSingleFileDatasetFactory(String path, int fileFormat, int fileSystem);
+  /**
+   * Creates dataset factory for reading file
+   * @param path full path of the file
+   * @param fileFormat format ID
+   * @param fileSystem fs ID
+   * @param startOffset random read position. -1 for reading from start.
+   * @param length reading length. -1 for reading all bytes of the file.
+   * @return
+   */
+  public native long makeSingleFileDatasetFactory(String path, int fileFormat, int fileSystem,
+      long startOffset, long length);
 
 }

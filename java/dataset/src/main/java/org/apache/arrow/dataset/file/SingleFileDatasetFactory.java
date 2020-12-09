@@ -27,12 +27,17 @@ import org.apache.arrow.memory.BufferAllocator;
 public class SingleFileDatasetFactory extends NativeDatasetFactory {
 
   public SingleFileDatasetFactory(BufferAllocator allocator, NativeMemoryPool memoryPool, FileFormat format,
-                                  FileSystem fs, String path) {
-    super(allocator, memoryPool, createNative(format, fs, path));
+      FileSystem fs, String path) {
+    super(allocator, memoryPool, createNative(format, fs, path, -1L, -1L));
   }
 
-  private static long createNative(FileFormat format, FileSystem fs, String path) {
-    return JniWrapper.get().makeSingleFileDatasetFactory(path, format.id(), fs.id());
+  public SingleFileDatasetFactory(BufferAllocator allocator, NativeMemoryPool memoryPool, FileFormat format,
+      FileSystem fs, String path, long startOffset, long length) {
+    super(allocator, memoryPool, createNative(format, fs, path, startOffset, length));
+  }
+
+  private static long createNative(FileFormat format, FileSystem fs, String path, long startOffset, long length) {
+    return JniWrapper.get().makeSingleFileDatasetFactory(path, format.id(), fs.id(), startOffset, length);
   }
 
 }

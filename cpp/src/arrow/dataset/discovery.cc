@@ -275,9 +275,10 @@ Result<std::shared_ptr<Dataset>> FileSystemDatasetFactory::Finish(FinishOptions 
 }
 
 Result<std::shared_ptr<DatasetFactory>> SingleFileDatasetFactory::Make(
-    std::string path, std::shared_ptr<fs::FileSystem> fs,
-    std::shared_ptr<FileFormat> format) {
-  std::shared_ptr<FileSource> file_src = std::make_shared<FileSource>(path, fs.get());
+    std::string path, int64_t start_offset, int64_t length,
+    std::shared_ptr<fs::FileSystem> fs, std::shared_ptr<FileFormat> format) {
+  std::shared_ptr<FileSource> file_src =
+      std::make_shared<FileSource>(path, start_offset, length, fs.get());
   return std::shared_ptr<DatasetFactory>(new SingleFileDatasetFactory(
       std::move(file_src), std::move(fs), std::move(format)));
 }
