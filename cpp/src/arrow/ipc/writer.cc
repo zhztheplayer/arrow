@@ -228,7 +228,7 @@ class RecordBatchSerializer {
       for (size_t i = 0; i < layout_buffers.size(); ++i) {
         const auto& layout = layout_buffers[i];
         auto& buffer = out_->body_buffers[buffer_idx + i];
-        if (buffer->size() > 0) {
+        if (buffer->data() && buffer->size() > 0) {
           switch (layout.kind) {
             case DataTypeLayout::BufferKind::FIXED_WIDTH:
               if (layout.byte_width == 4 && field->type()->id() != Type::FLOAT) {

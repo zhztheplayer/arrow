@@ -48,23 +48,36 @@ class FastPForCodec : public Codec {
 
   Result<int64_t> Compress(int64_t input_len, const uint8_t* input,
                            int64_t output_buffer_len, uint8_t* output_buffer) override {
-    DCHECK(BitUtil::IsMultipleOf8(input_len));
-    size_t length = input_len / sizeof(T);
+    using input_type = T;
+    using output_type = uint32_t;
+    auto base_size = sizeof(input_type);
+    if ((input_len & (base_size - 1)) != 0) {
+      return Status::Invalid("Buffer size " + std::to_string(input_len) +
+                             " is not multiple of " + std::to_string(base_size));
+    }
+    size_t length = input_len / base_size;
     size_t nvalue;
-    fastpfor_codec_->encodeArray(reinterpret_cast<T*>(const_cast<uint8_t*>(input)),
-                                 length, reinterpret_cast<uint32_t*>(output_buffer),
-                                 nvalue);
-    return nvalue * sizeof(uint32_t);
+    fastpfor_codec_->encodeArray(
+        reinterpret_cast<input_type*>(const_cast<uint8_t*>(input)), length,
+        reinterpret_cast<output_type*>(output_buffer), nvalue);
+    return nvalue * sizeof(output_type);
   }
 
   Result<int64_t> Decompress(int64_t input_len, const uint8_t* input,
                              int64_t output_buffer_len, uint8_t* output_buffer) override {
-    DCHECK(BitUtil::IsMultipleOf8(input_len));
-    size_t length = input_len / sizeof(uint32_t);
+    using input_type = uint32_t;
+    using output_type = T;
+    auto base_size = sizeof(input_type);
+    if ((input_len & (base_size - 1)) != 0) {
+      return Status::Invalid("Buffer size " + std::to_string(input_len) +
+                             " is not multiple of " + std::to_string(base_size));
+    }
+    size_t length = input_len / base_size;
     size_t nvalue;
-    fastpfor_codec_->decodeArray(reinterpret_cast<uint32_t*>(const_cast<uint8_t*>(input)),
-                                 length, reinterpret_cast<T*>(output_buffer), nvalue);
-    return nvalue * sizeof(T);
+    fastpfor_codec_->decodeArray(
+        reinterpret_cast<input_type*>(const_cast<uint8_t*>(input)), length,
+        reinterpret_cast<output_type*>(output_buffer), nvalue);
+    return nvalue * sizeof(output_type);
   }
 
   Result<std::shared_ptr<Compressor>> MakeCompressor() override {
@@ -88,7 +101,7 @@ class FastPForCodec : public Codec {
 
 }  // namespace
 
-template<typename T>
+template <typename T>
 std::unique_ptr<Codec> MakeFastPForCodec() {
   return std::unique_ptr<Codec>(new FastPForCodec<T>());
 }
