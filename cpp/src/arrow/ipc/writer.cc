@@ -165,10 +165,11 @@ class RecordBatchSerializer {
   }
 
   Status CompressBuffer(const Buffer& buffer, util::Codec* codec,
-                        std::shared_ptr<Buffer>* out) {
+                        std::shared_ptr<Buffer>* out, MemoryPool* pool) {
     // Convert buffer to uncompressed-length-prefixed compressed buffer
     int64_t maximum_length = codec->MaxCompressedLen(buffer.size(), buffer.data());
-    ARROW_ASSIGN_OR_RAISE(auto result, AllocateBuffer(maximum_length + sizeof(int64_t)));
+    ARROW_ASSIGN_OR_RAISE(auto result,
+                          AllocateBuffer(maximum_length + sizeof(int64_t), pool));
 
     int64_t actual_length;
     ARROW_ASSIGN_OR_RAISE(actual_length,
@@ -193,8 +194,8 @@ class RecordBatchSerializer {
 
     auto CompressOne = [&](size_t i) {
       if (out_->body_buffers[i]->size() > 0) {
-        RETURN_NOT_OK(
-            CompressBuffer(*out_->body_buffers[i], codec.get(), &out_->body_buffers[i]));
+        RETURN_NOT_OK(CompressBuffer(*out_->body_buffers[i], codec.get(),
+                                     &out_->body_buffers[i], options_.memory_pool));
       }
       return Status::OK();
     };
@@ -211,10 +212,10 @@ class RecordBatchSerializer {
         codec, util::Codec::Create(Compression::LZ4_FRAME, options_.compression_level));
     ARROW_ASSIGN_OR_RAISE(
         fastpfor32_codec,
-        util::Codec::CreateInt32(Compression::FASTPFOR, options_.compression_level));
+        util::Codec::CreateInt32(options_.compression, options_.compression_level));
     ARROW_ASSIGN_OR_RAISE(
         fastpfor64_codec,
-        util::Codec::CreateInt64(Compression::FASTPFOR, options_.compression_level));
+        util::Codec::CreateInt64(options_.compression, options_.compression_level));
 
     AppendCustomMetadata("ARROW:experimental_compression",
                          util::Codec::GetCodecAsString(options_.compression));
@@ -227,20 +228,24 @@ class RecordBatchSerializer {
       for (size_t i = 0; i < layout_buffers.size(); ++i) {
         const auto& layout = layout_buffers[i];
         auto& buffer = out_->body_buffers[buffer_idx + i];
-        if (buffer->data()) {
+        if (buffer->size() > 0) {
           switch (layout.kind) {
             case DataTypeLayout::BufferKind::FIXED_WIDTH:
               if (layout.byte_width == 4) {
-                RETURN_NOT_OK(CompressBuffer(*buffer, fastpfor32_codec.get(), &buffer));
+                RETURN_NOT_OK(CompressBuffer(*buffer, fastpfor32_codec.get(), &buffer,
+                                             options_.memory_pool));
               } else if (layout.byte_width == 8) {
-                RETURN_NOT_OK(CompressBuffer(*buffer, fastpfor64_codec.get(), &buffer));
+                RETURN_NOT_OK(CompressBuffer(*buffer, fastpfor64_codec.get(), &buffer,
+                                             options_.memory_pool));
               } else {
-                RETURN_NOT_OK(CompressBuffer(*buffer, codec.get(), &buffer));
+                RETURN_NOT_OK(
+                    CompressBuffer(*buffer, codec.get(), &buffer, options_.memory_pool));
               }
               break;
             case DataTypeLayout::BufferKind::BITMAP:
             case DataTypeLayout::BufferKind::VARIABLE_WIDTH:
-              RETURN_NOT_OK(CompressBuffer(*buffer, codec.get(), &buffer));
+              RETURN_NOT_OK(
+                  CompressBuffer(*buffer, codec.get(), &buffer, options_.memory_pool));
               break;
             case DataTypeLayout::BufferKind::ALWAYS_NULL:
               break;

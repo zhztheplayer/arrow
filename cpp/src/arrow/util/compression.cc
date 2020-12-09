@@ -173,7 +173,7 @@ Result<std::unique_ptr<Codec>> Codec::Create(Compression::type codec_type,
 }
 
 Result<std::unique_ptr<Codec>> Codec::CreateInt32(Compression::type codec_type,
-                                                   int compression_level) {
+                                                  int compression_level) {
   return CreateByType<uint32_t>(codec_type, compression_level);
 }
 
@@ -249,6 +249,12 @@ bool Codec::IsAvailable(Compression::type codec_type) {
 #endif
     case Compression::BZ2:
 #ifdef ARROW_WITH_BZ2
+      return true;
+#else
+      return false;
+#endif
+    case Compression::FASTPFOR:
+#ifdef ARROW_WITH_FASTPFOR
       return true;
 #else
       return false;
