@@ -36,26 +36,26 @@ namespace internal {
 
 namespace {
 
-template <typename T>
+template <typename IntType>
 class FastPForCodec : public Codec {
  public:
   FastPForCodec() = default;
 
   int64_t MaxCompressedLen(int64_t input_len,
                            const uint8_t* ARROW_ARG_UNUSED(input)) override {
-    return input_len + 1024 * sizeof(T);
+    return input_len + 1024 * sizeof(IntType);
   }
 
   Result<int64_t> Compress(int64_t input_len, const uint8_t* input,
                            int64_t output_buffer_len, uint8_t* output_buffer) override {
-    using input_type = T;
+    using input_type = IntType;
     using output_type = uint32_t;
-    auto base_size = sizeof(input_type);
-    if ((input_len & (base_size - 1)) != 0) {
+    auto base_width = sizeof(input_type);
+    if ((input_len & (base_width - 1)) != 0) {
       return Status::Invalid("Buffer size " + std::to_string(input_len) +
-                             " is not multiple of " + std::to_string(base_size));
+                             " is not multiple of " + std::to_string(base_width));
     }
-    size_t length = input_len / base_size;
+    size_t length = input_len / base_width;
     size_t nvalue;
     fastpfor_codec_->encodeArray(
         reinterpret_cast<input_type*>(const_cast<uint8_t*>(input)), length,
@@ -66,13 +66,13 @@ class FastPForCodec : public Codec {
   Result<int64_t> Decompress(int64_t input_len, const uint8_t* input,
                              int64_t output_buffer_len, uint8_t* output_buffer) override {
     using input_type = uint32_t;
-    using output_type = T;
-    auto base_size = sizeof(input_type);
-    if ((input_len & (base_size - 1)) != 0) {
+    using output_type = IntType;
+    auto base_width = sizeof(input_type);
+    if ((input_len & (base_width - 1)) != 0) {
       return Status::Invalid("Buffer size " + std::to_string(input_len) +
-                             " is not multiple of " + std::to_string(base_size));
+                             " is not multiple of " + std::to_string(base_width));
     }
-    size_t length = input_len / base_size;
+    size_t length = input_len / base_width;
     size_t nvalue;
     fastpfor_codec_->decodeArray(
         reinterpret_cast<input_type*>(const_cast<uint8_t*>(input)), length,
@@ -89,7 +89,10 @@ class FastPForCodec : public Codec {
   }
 
   Status Init() override {
-    fastpfor_codec_ = FastPForLib::CODECFactory::getFromName("fastpfor256");
+    // FastPForLib::CODECFactory::getFromName("fastpfor256") is not thread safe.
+    fastpfor_codec_ =
+        std::make_shared<FastPForLib::CompositeCodec<FastPForLib::FastPFor<8>,
+                                                     FastPForLib::VariableByte>>();
     return Status::OK();
   }
 

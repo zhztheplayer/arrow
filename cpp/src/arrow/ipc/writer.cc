@@ -206,15 +206,15 @@ class RecordBatchSerializer {
 
   Status CompressBodyBuffersByType(const std::vector<std::shared_ptr<Field>>& fields) {
     std::unique_ptr<util::Codec> codec;
-    std::unique_ptr<util::Codec> fastpfor32_codec;
-    std::unique_ptr<util::Codec> fastpfor64_codec;
+    std::unique_ptr<util::Codec> int32_codec;
+    std::unique_ptr<util::Codec> int64_codec;
     ARROW_ASSIGN_OR_RAISE(
         codec, util::Codec::Create(Compression::LZ4_FRAME, options_.compression_level));
     ARROW_ASSIGN_OR_RAISE(
-        fastpfor32_codec,
+        int32_codec,
         util::Codec::CreateInt32(options_.compression, options_.compression_level));
     ARROW_ASSIGN_OR_RAISE(
-        fastpfor64_codec,
+        int64_codec,
         util::Codec::CreateInt64(options_.compression, options_.compression_level));
 
     AppendCustomMetadata("ARROW:experimental_compression",
@@ -228,14 +228,14 @@ class RecordBatchSerializer {
       for (size_t i = 0; i < layout_buffers.size(); ++i) {
         const auto& layout = layout_buffers[i];
         auto& buffer = out_->body_buffers[buffer_idx + i];
-        if (buffer->data() && buffer->size() > 0) {
+        if (buffer->size() > 0) {
           switch (layout.kind) {
             case DataTypeLayout::BufferKind::FIXED_WIDTH:
               if (layout.byte_width == 4 && field->type()->id() != Type::FLOAT) {
-                RETURN_NOT_OK(CompressBuffer(*buffer, fastpfor32_codec.get(), &buffer,
+                RETURN_NOT_OK(CompressBuffer(*buffer, int32_codec.get(), &buffer,
                                              options_.memory_pool));
               } else if (layout.byte_width == 8 && field->type()->id() != Type::DOUBLE) {
-                RETURN_NOT_OK(CompressBuffer(*buffer, fastpfor64_codec.get(), &buffer,
+                RETURN_NOT_OK(CompressBuffer(*buffer, int64_codec.get(), &buffer,
                                              options_.memory_pool));
               } else {
                 RETURN_NOT_OK(
