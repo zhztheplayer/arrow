@@ -352,7 +352,7 @@ TEST_P(CodecTest, CodecRoundtrip) {
     return;
   }
   if (compression == Compression::FASTPFOR) {
-    // SKIP: BZ2 doesn't support one-shot compression without type
+    // SKIP: FastPFOR only support one-shot compression for 32bit and 64bit integer
     return;
   }
 
@@ -473,7 +473,7 @@ TEST_P(CodecTest, StreamingCompressor) {
     return;
   }
   if (GetCompression() == Compression::FASTPFOR) {
-    // SKIP: FastPFOR raw format doesn't support streaming decompression.
+    // SKIP: FastPFOR doesn't support streaming decompression.
     return;
   }
 
@@ -503,7 +503,7 @@ TEST_P(CodecTest, StreamingDecompressor) {
     return;
   }
   if (GetCompression() == Compression::FASTPFOR) {
-    // SKIP: FastPFOR raw format doesn't support streaming decompression.
+    // SKIP: FastPFOR doesn't support streaming decompression.
     return;
   }
 
@@ -529,7 +529,7 @@ TEST_P(CodecTest, StreamingRoundtrip) {
     return;
   }
   if (GetCompression() == Compression::FASTPFOR) {
-    // SKIP: FastPFOR raw format doesn't support streaming decompression.
+    // SKIP: FastPFOR doesn't support streaming decompression.
     return;
   }
 
@@ -555,7 +555,7 @@ TEST_P(CodecTest, StreamingDecompressorReuse) {
     return;
   }
   if (GetCompression() == Compression::FASTPFOR) {
-    // SKIP: FastPFOR raw format doesn't support streaming decompression.
+    // SKIP: FastPFOR doesn't support streaming decompression.
     return;
   }
 

@@ -30,7 +30,18 @@ namespace arrow {
 
 struct Compression {
   /// \brief Compression algorithm
-  enum type { UNCOMPRESSED, SNAPPY, GZIP, BROTLI, ZSTD, LZ4, LZ4_FRAME, LZO, BZ2, FASTPFOR };
+  enum type {
+    UNCOMPRESSED,
+    SNAPPY,
+    GZIP,
+    BROTLI,
+    ZSTD,
+    LZ4,
+    LZ4_FRAME,
+    LZO,
+    BZ2,
+    FASTPFOR
+  };
 
   static constexpr int kUseDefaultCompressionLevel = std::numeric_limits<int>::min();
 };
@@ -182,7 +193,7 @@ class ARROW_EXPORT Codec {
   virtual Status Init();
 
   /// \brief Create a codec for the given compression algorithm for the specific type
-  template<typename T>
+  template <typename T>
   static Result<std::unique_ptr<Codec>> CreateByType(
       Compression::type codec_type, int compression_level = kUseDefaultCompressionLevel);
 };
