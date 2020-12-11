@@ -139,8 +139,6 @@ macro(build_dependency DEPENDENCY_NAME)
     build_zlib()
   elseif("${DEPENDENCY_NAME}" STREQUAL "ZSTD")
     build_zstd()
-  elseif("${DEPENDENCY_NAME}" STREQUAL "FastPFOR")
-    build_fastpfor()
   else()
     message(FATAL_ERROR "Unknown thirdparty dependency to build: ${DEPENDENCY_NAME}")
   endif()
@@ -489,8 +487,9 @@ if(DEFINED ENV{FASTPFOR_SOURCE_URL})
   set(FASTPFOR_SOURCE_URL "$ENV{FASTPFOR_SOURCE_URL}")
 else()
   set_urls(
-    FASTPFOR_SOURCE_URL "https://github.com/lemire/FastPFor/archive/master.zip"
-  )
+    FASTPFOR_SOURCE_URL
+    "https://github.com/lemire/FastPFor/archive/${ARROW_FASTPFOR_BUILD_VERSION}.tar.gz"
+    )
 endif()
 
 # ----------------------------------------------------------------------
@@ -1951,43 +1950,40 @@ if(ARROW_WITH_BZ2)
   include_directories(SYSTEM "${BZIP2_INCLUDE_DIR}")
 endif()
 
-macro(build_fastpfor)
-  message(STATUS "Building FastPFOR from source")
-  set(FASTPFOR_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/fastpfor_ep-install")
+if(ARROW_WITH_FASTPFOR)
+  message(STATUS "Building (vendored) FastPFOR from source")
+
   if(MSVC)
     message(FATAL_ERROR "Cannot build FastPFOR on MSVC")
   else()
     set(FASTPFOR_STATIC_LIB_NAME libFastPFOR.a)
   endif()
+
+  set(FASTPFOR_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/fastpfor_ep-install")
   set(FASTPFOR_STATIC_LIB "${FASTPFOR_PREFIX}/lib/${FASTPFOR_STATIC_LIB_NAME}")
-  set(FASTPFOR_CMAKE_ARGS ${EP_COMMON_CMAKE_ARGS} "-DCMAKE_INSTALL_PREFIX=${FASTPFOR_PREFIX}"
-          -DCMAKE_INSTALL_LIBDIR=lib
-          -DCMAKE_BUILD_TYPE=Release
-          )
+  set(FASTPFOR_INCLUDE_DIR "${FASTPFOR_PREFIX}/include")
+  set(FASTPFOR_CMAKE_ARGS
+      ${EP_COMMON_CMAKE_ARGS}
+      "-DCMAKE_INSTALL_PREFIX=${FASTPFOR_PREFIX}"
+      -DCMAKE_INSTALL_LIBDIR=lib
+      -DCMAKE_BUILD_TYPE=Release)
 
   externalproject_add(fastpfor_ep
-          INSTALL_DIR ${FASTPFOR_PREFIX}
-          URL ${FASTPFOR_SOURCE_URL} ${EP_LOG_OPTIONS}
-          BUILD_BYPRODUCTS "${FASTPFOR_STATIC_LIB}"
-          CMAKE_ARGS ${FASTPFOR_CMAKE_ARGS})
+                      INSTALL_DIR ${FASTPFOR_PREFIX}
+                      URL ${FASTPFOR_SOURCE_URL} ${EP_LOG_OPTIONS}
+                      BUILD_BYPRODUCTS "${FASTPFOR_STATIC_LIB}"
+                      CMAKE_ARGS ${FASTPFOR_CMAKE_ARGS})
 
-  file(MAKE_DIRECTORY "${FASTPFOR_PREFIX}/include")
+  include_directories(SYSTEM ${FASTPFOR_INCLUDE_DIR})
+  file(MAKE_DIRECTORY ${FASTPFOR_INCLUDE_DIR})
 
   add_library(FastPFOR::FastPFOR STATIC IMPORTED)
   set_target_properties(FastPFOR::FastPFOR
-          PROPERTIES IMPORTED_LOCATION "${FASTPFOR_STATIC_LIB}"
-          INTERFACE_INCLUDE_DIRECTORIES "${FASTPFOR_PREFIX}/include")
-  set(FASTPFOR_INCLUDE_DIR "${BZIP2_PREFIX}/include")
+                        PROPERTIES IMPORTED_LOCATION "${FASTPFOR_STATIC_LIB}"
+                                   INTERFACE_INCLUDE_DIRECTORIES "${FASTPFOR_INCLUDE_DIR}")
 
   add_dependencies(toolchain fastpfor_ep)
   add_dependencies(FastPFOR::FastPFOR fastpfor_ep)
-endmacro()
-
-if(ARROW_WITH_FASTPFOR)
-  resolve_dependency(FastPFOR)
-
-  get_target_property(FASTPFOR_INCLUDE_DIR FastPFOR::FastPFOR INTERFACE_INCLUDE_DIRECTORIES)
-  include_directories(SYSTEM "${FASTPFOR_INCLUDE_DIR}")
 endif()
 
 macro(build_cares)
