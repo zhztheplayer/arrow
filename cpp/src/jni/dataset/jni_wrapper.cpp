@@ -276,7 +276,8 @@ std::shared_ptr<arrow::fs::FileSystem> GetFileSystem(JNIEnv* env, jint id,
     case 0:
       *out_path = path;
       return std::make_shared<arrow::fs::LocalFileSystem>();
-    case 1: {
+    case 1:
+    case 2: {
       JNI_ASSIGN_OR_THROW(std::shared_ptr<arrow::fs::FileSystem> ret,
                           arrow::fs::FileSystemFromUri(path, out_path))
       return ret;
