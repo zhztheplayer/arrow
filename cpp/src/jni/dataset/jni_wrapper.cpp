@@ -543,6 +543,9 @@ JNIEXPORT jbyteArray JNICALL Java_org_apache_arrow_dataset_jni_JniWrapper_inspec
   std::shared_ptr<arrow::dataset::DatasetFactory> d =
       dataset_factory_holder_.Lookup(dataset_factor_id);
   JNI_ASSIGN_OR_THROW(std::shared_ptr<arrow::Schema> schema, d->Inspect())
+  if (schema == nullptr) {
+    return nullptr;
+  }
   return ToSchemaByteArray(env, schema);
 }
 
