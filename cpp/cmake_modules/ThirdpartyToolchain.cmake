@@ -483,6 +483,15 @@ else()
     )
 endif()
 
+if(DEFINED ENV{FASTPFOR_SOURCE_URL})
+  set(FASTPFOR_SOURCE_URL "$ENV{FASTPFOR_SOURCE_URL}")
+else()
+  set_urls(
+    FASTPFOR_SOURCE_URL
+    "https://github.com/lemire/FastPFor/archive/${ARROW_FASTPFOR_BUILD_VERSION}.tar.gz"
+    )
+endif()
+
 # ----------------------------------------------------------------------
 # ExternalProject options
 
@@ -1939,6 +1948,42 @@ if(ARROW_WITH_BZ2)
                                      INTERFACE_INCLUDE_DIRECTORIES "${BZIP2_INCLUDE_DIR}")
   endif()
   include_directories(SYSTEM "${BZIP2_INCLUDE_DIR}")
+endif()
+
+if(ARROW_WITH_FASTPFOR)
+  message(STATUS "Building (vendored) FastPFOR from source")
+
+  if(MSVC)
+    message(FATAL_ERROR "Cannot build FastPFOR on MSVC")
+  else()
+    set(FASTPFOR_STATIC_LIB_NAME libFastPFOR.a)
+  endif()
+
+  set(FASTPFOR_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/fastpfor_ep-install")
+  set(FASTPFOR_STATIC_LIB "${FASTPFOR_PREFIX}/lib/${FASTPFOR_STATIC_LIB_NAME}")
+  set(FASTPFOR_INCLUDE_DIR "${FASTPFOR_PREFIX}/include")
+  set(FASTPFOR_CMAKE_ARGS
+      ${EP_COMMON_CMAKE_ARGS}
+      "-DCMAKE_INSTALL_PREFIX=${FASTPFOR_PREFIX}"
+      -DCMAKE_INSTALL_LIBDIR=lib
+      -DCMAKE_BUILD_TYPE=Release)
+
+  externalproject_add(fastpfor_ep
+                      INSTALL_DIR ${FASTPFOR_PREFIX}
+                      URL ${FASTPFOR_SOURCE_URL} ${EP_LOG_OPTIONS}
+                      BUILD_BYPRODUCTS "${FASTPFOR_STATIC_LIB}"
+                      CMAKE_ARGS ${FASTPFOR_CMAKE_ARGS})
+
+  include_directories(SYSTEM ${FASTPFOR_INCLUDE_DIR})
+  file(MAKE_DIRECTORY ${FASTPFOR_INCLUDE_DIR})
+
+  add_library(FastPFOR::FastPFOR STATIC IMPORTED)
+  set_target_properties(FastPFOR::FastPFOR
+                        PROPERTIES IMPORTED_LOCATION "${FASTPFOR_STATIC_LIB}"
+                                   INTERFACE_INCLUDE_DIRECTORIES "${FASTPFOR_INCLUDE_DIR}")
+
+  add_dependencies(toolchain fastpfor_ep)
+  add_dependencies(FastPFOR::FastPFOR fastpfor_ep)
 endif()
 
 macro(build_cares)
