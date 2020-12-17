@@ -622,7 +622,10 @@ class ReservationListenableMemoryPool::ReservationListenableMemoryPoolImpl {
     return bytes_granted;
   }
 
-  int64_t bytes_allocated() { return pool_->bytes_allocated(); }
+  int64_t bytes_allocated() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return bytes_reserved_;
+  }
 
   int64_t max_memory() { return pool_->max_memory(); }
 

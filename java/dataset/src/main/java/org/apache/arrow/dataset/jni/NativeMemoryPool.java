@@ -42,6 +42,10 @@ public class NativeMemoryPool implements AutoCloseable {
     return new NativeMemoryPool(createListenableMemoryPool(listener));
   }
 
+  public long getBytesAllocated() {
+    return bytesAllocated(nativeInstanceId);
+  }
+
   public long getNativeInstanceId() {
     return nativeInstanceId;
   }
@@ -56,4 +60,6 @@ public class NativeMemoryPool implements AutoCloseable {
   private static native long createListenableMemoryPool(ReservationListener listener);
 
   private static native void releaseMemoryPool(long id);
+
+  private static native long bytesAllocated(long id);
 }
