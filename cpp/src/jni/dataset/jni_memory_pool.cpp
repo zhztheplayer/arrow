@@ -48,7 +48,7 @@ class ReserveMemory : public arrow::ReservationListener {
     if (env->ExceptionCheck()) {
       env->ExceptionDescribe();
       env->ExceptionClear();
-      return arrow::Status::Invalid("Memory reservation failed in Java");
+      return arrow::Status::OutOfMemory("Memory reservation failed in Java");
     }
     return arrow::Status::OK();
   }
