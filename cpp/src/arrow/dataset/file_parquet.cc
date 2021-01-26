@@ -324,7 +324,6 @@ Result<ScanTaskIterator> ParquetFileFormat::ScanFile(std::shared_ptr<ScanOptions
 
   // Open the reader and pay the real IO cost.
 
-  ARROW_ASSIGN_OR_RAISE(row_groups, parquet_fragment->FilterRowGroups(options->filter));
 
   FileSource source = fragment->source();
   ARROW_ASSIGN_OR_RAISE(std::shared_ptr<parquet::arrow::FileReader> file_reader,
@@ -333,6 +332,8 @@ Result<ScanTaskIterator> ParquetFileFormat::ScanFile(std::shared_ptr<ScanOptions
   auto reader = file_reader->parquet_reader();
   // Ensure that parquet_fragment has FileMetaData
   RETURN_NOT_OK(parquet_fragment->EnsureCompleteMetadata(file_reader.get()));
+
+  ARROW_ASSIGN_OR_RAISE(row_groups, parquet_fragment->FilterRowGroups(options->filter));
 
   for (int i : row_groups) {
     if (i >= reader->metadata()->num_row_groups()) {

@@ -58,21 +58,23 @@ public class NativeDatasetTest {
   private void testDatasetFactoryEndToEnd(DatasetFactory factory, int taskCount, int vectorCount, int rowCount) {
     Schema schema = factory.inspect();
 
-    Assert.assertEquals("Schema<registration_dttm: Timestamp(NANOSECOND, null), id: Int(32, true), first_name: Utf8, " +
-            "last_name: Utf8, email: Utf8, gender: Utf8, ip_address: Utf8, cc: Utf8, country: Utf8, birthdate: Utf8, " +
-            "salary: FloatingPoint(DOUBLE), title: Utf8, comments: Utf8>(metadata: {org.apache.spark.version=3.0.0, " +
+    Assert.assertEquals("Schema<registration_dttm: Timestamp(NANOSECOND, null), id: Int(32, true), first_name: " +
+            "Utf8[dictionary: 0], last_name: Utf8[dictionary: 1], email: Utf8[dictionary: 2], " +
+            "gender: Utf8[dictionary: 3], ip_address: Utf8[dictionary: 4], cc: Utf8[dictionary: 5]," +
+            " country: Utf8[dictionary: 6], birthdate: Utf8[dictionary: 7], salary: FloatingPoint(DOUBLE), " +
+            "title: Utf8[dictionary: 8], comments: Utf8[dictionary: 9]>(metadata: {org.apache.spark.version=3.0.0, " +
             "org.apache.spark.sql.parquet.row.metadata={\"type\":\"struct\",\"fields\":[{\"name\":" +
-            "\"registration_dttm\",\"type\":\"timestamp\",\"nullable\":true,\"metadata\":{}}," +
-            "{\"name\":\"id\",\"type\":\"integer\",\"nullable\":true,\"metadata\":{}},{\"name\":" +
-            "\"first_name\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"last_name\"," +
-            "\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"email\",\"type\":\"string\"," +
-            "\"nullable\":true,\"metadata\":{}},{\"name\":\"gender\",\"type\":\"string\",\"nullable\":true," +
-            "\"metadata\":{}},{\"name\":\"ip_address\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}," +
-            "{\"name\":\"cc\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"country\"," +
-            "\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"birthdate\",\"type\":\"string\"," +
-            "\"nullable\":true,\"metadata\":{}},{\"name\":\"salary\",\"type\":\"double\",\"nullable\":true," +
-            "\"metadata\":{}},{\"name\":\"title\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}," +
-            "{\"name\":\"comments\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}]}})",
+            "\"registration_dttm\",\"type\":\"timestamp\",\"nullable\":true,\"metadata\":{}},{\"name\":" +
+            "\"id\",\"type\":\"integer\",\"nullable\":true,\"metadata\":{}},{\"name\":\"first_name\",\"type" +
+            "\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"last_name\",\"type\":\"string\"," +
+            "\"nullable\":true,\"metadata\":{}},{\"name\":\"email\",\"type\":\"string\",\"nullable\":true," +
+            "\"metadata\":{}},{\"name\":\"gender\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}," +
+            "{\"name\":\"ip_address\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"cc\"," +
+            "\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"country\",\"type\":\"string\"," +
+            "\"nullable\":true,\"metadata\":{}},{\"name\":\"birthdate\",\"type\":\"string\",\"nullable\":true," +
+            "\"metadata\":{}},{\"name\":\"salary\",\"type\":\"double\",\"nullable\":true,\"metadata\":{}}," +
+            "{\"name\":\"title\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"comments\"," +
+            "\"type\":\"string\",\"nullable\":true,\"metadata\":{}}]}})",
         schema.toString());
 
     Dataset dataset = factory.finish();
@@ -173,8 +175,8 @@ public class NativeDatasetTest {
       Assert.assertEquals(100, vsr.getRowCount());
 
       // check if projector is applied
-      Assert.assertEquals("Schema<id: Int(32, true), title: Utf8>",
-          vsr.getSchema().toString());
+      Assert.assertEquals(2,
+          vsr.getSchema().getFields().size());
     }
     Assert.assertEquals(10, vsrCount);
 
@@ -227,13 +229,13 @@ public class NativeDatasetTest {
       rowCount += vsr.getRowCount();
 
       // check if projector is applied
-      Assert.assertEquals("Schema<id: Int(32, true), title: Utf8>",
-          vsr.getSchema().toString());
+      Assert.assertEquals(2,
+          vsr.getSchema().getFields().size());
 
       // dictionaries
-      Assert.assertEquals(0, dvs.size());
+      Assert.assertEquals(1, dvs.size());
     }
-    Assert.assertEquals(1000, rowCount);
+    Assert.assertEquals(1, rowCount);
 
     if (vsr != null) {
       vsr.close();
@@ -280,8 +282,8 @@ public class NativeDatasetTest {
       Assert.assertEquals(100, vsr.getRowCount());
 
       // check if projector is applied
-      Assert.assertEquals("Schema<id: Int(32, true), title: Utf8>",
-          vsr.getSchema().toString());
+      Assert.assertEquals(2,
+          vsr.getSchema().getFields().size());
     }
     Assert.assertEquals(10, vsrCount);
 
